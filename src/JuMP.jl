@@ -122,7 +122,7 @@ show(io::IO, m::Model) = print(m.objSense == :Max ? "Maximization problem" :
 # Variable class
 # Doesn't actually do much, just a pointer back to the model
 type Variable
-  m::Model
+  m
   col::Int
 end
 
@@ -331,6 +331,8 @@ include("writers.jl")
 include("solvers.jl")
 # Macros - @defVar, sum{}, etc.
 include("macros.jl")
+# Robust stuff
+include("robust.jl")
 
 ##########################################################################
 end
