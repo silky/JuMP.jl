@@ -1,5 +1,5 @@
 export RobustModel, Uncertain, UAffExpr, FullAffExpr
-export uAffToStr, fullAffToStr
+export affToStr, affToStr
 
 type RobustModel
   obj
@@ -95,10 +95,10 @@ UAffExpr() = UAffExpr(Uncertain[],Float64[],0.)
 UAffExpr(c::Float64) = UAffExpr(Uncertain[],Float64[],c)
 UAffExpr(u::Uncertain, c::Float64) = UAffExpr([u],[c],0.)
 
-print(io::IO, a::UAffExpr) = print(io, uAffToStr(a))
-show(io::IO, a::UAffExpr) = print(io, uAffToStr(a))
+print(io::IO, a::UAffExpr) = print(io, affToStr(a))
+show(io::IO, a::UAffExpr) = print(io, affToStr(a))
 
-function uAffToStr(a::UAffExpr, showConstant=true)
+function affToStr(a::UAffExpr, showConstant=true)
   if length(a.uncs) == 0
     return string(a.constant)
   end
@@ -145,11 +145,11 @@ end
 
 FullAffExpr() = FullAffExpr(Variable[],UAffExpr[],UAffExpr())
 
-print(io::IO, a::FullAffExpr) = print(io, fullAffToStr(a))
-show(io::IO, a::FullAffExpr) = print(io, fullAffToStr(a))
+print(io::IO, a::FullAffExpr) = print(io, affToStr(a))
+show(io::IO, a::FullAffExpr) = print(io, affToStr(a))
 
 # Pretty cool that this is almost the same as normal affExpr
-function fullAffToStr(a::FullAffExpr, showConstant=true)
+function affToStr(a::FullAffExpr, showConstant=true)
   if length(a.vars) == 0
     return string(a.constant)
   end
@@ -158,18 +158,18 @@ function fullAffToStr(a::FullAffExpr, showConstant=true)
   m = a.vars[1].m
 
   # Collect like terms
-  indvec = IndexedVector(UAffExpr,m.numCols)
-  for ind in 1:length(a.vars)
-    addelt(indvec, a.vars[ind].col, a.coeffs[ind])
-  end
+  #indvec = IndexedVector(UAffExpr, m.numCols)
+  #for ind in 1:length(a.vars)
+  #  addelt(indvec, a.vars[ind].col, a.coeffs[ind])
+  #end
 
   # Stringify the terms
   termStrings = Array(ASCIIString, length(a.vars))
   numTerms = 0
-  for i in 1:indvec.nnz
-    idx = indvec.nzidx[i]
+  for i in 1:length(a.vars) #indvec.nnz
+    #idx = indvec.nzidx[i]
     numTerms += 1
-    termStrings[numTerms] = "$(uAffToStr(indvec.elts[idx])) $(getName(m,idx))"
+    termStrings[numTerms] = "($(affToStr(a.coeffs[i]))) $(getName(a.vars[i]))"
   end
 
   # And then connect them up with +s
@@ -178,7 +178,7 @@ function fullAffToStr(a::FullAffExpr, showConstant=true)
   # TODO(idunning): Think more carefully about this
   #if abs(a.constant) >= 0.000001 && showConstant
   if showConstant
-    ret = string(ret," + ",uAffToStr(a.constant))
+    ret = string(ret," + ",affToStr(a.constant))
   end
   return ret
 end
@@ -233,9 +233,9 @@ end
 function conToStr(c::UncSetConstraint)
   s = sense(c)
   if s == :range
-    return string(c.lb," <= ",uAffToStr(c.terms,false)," <= ",c.ub)
+    return string(c.lb," <= ",affToStr(c.terms,false)," <= ",c.ub)
   else
-    return string(uAffToStr(c.terms,false)," ",s," ",rhs(c))
+    return string(affToStr(c.terms,false)," ",s," ",rhs(c))
   end
 end
 
@@ -289,9 +289,9 @@ end
 function conToStr(c::UncConstraint)
   s = sense(c)
   if s == :range
-    return string(c.lb," <= ",fullAffToStr(c.terms,false)," <= ",c.ub)
+    return string(c.lb," <= ",affToStr(c.terms,false)," <= ",c.ub)
   else
-    return string(fullAffToStr(c.terms,false)," ",s," ",rhs(c))
+    return string(affToStr(c.terms,false)," ",s," ",rhs(c))
   end
 end
 
@@ -320,12 +320,17 @@ end
 (+)(lhs::Number, rhs::Uncertain) = UAffExpr([rhs],[+1.],convert(Float64,lhs))
 (-)(lhs::Number, rhs::Uncertain) = UAffExpr([rhs],[-1.],convert(Float64,lhs))
 (*)(lhs::Number, rhs::Uncertain) = UAffExpr([rhs],[convert(Float64,lhs)], 0.)
-(/)(lhs::Number, rhs::Uncertain) = error("Cannot divide by uncertain")
+(/)(lhs::Number, rhs::Uncertain) = error("Cannot divide by an uncertain")
 # Number--UAffExpr
 (+)(lhs::Number, rhs::UAffExpr) = UAffExpr(copy(rhs.uncs),copy(rhs.coeffs),lhs+rhs.constant)
 (-)(lhs::Number, rhs::UAffExpr) = UAffExpr(copy(rhs.uncs),    -rhs.coeffs ,lhs-rhs.constant)
 (*)(lhs::Number, rhs::UAffExpr) = UAffExpr(copy(rhs.uncs), lhs*rhs.coeffs ,lhs*rhs.constant)
 (/)(lhs::Number, rhs::UAffExpr) = error("Cannot divide number by an uncertain expression")
+# Number--FullAffExpr
+(+)(lhs::Number, rhs::FullAffExpr) = FullAffExpr(copy(rhs.vars),copy(rhs.coeffs),lhs+rhs.constant)
+(-)(lhs::Number, rhs::FullAffExpr) = FullAffExpr(copy(rhs.vars),[0.0-rhs.coeffs[i] for i=1:length(rhs.coeffs)],lhs-rhs.constant)
+(*)(lhs::Number, rhs::FullAffExpr) = FullAffExpr(copy(rhs.vars),[lhs*rhs.coeffs[i] for i=1:length(rhs.coeffs)] ,lhs*rhs.constant)
+(/)(lhs::Number, rhs::FullAffExpr) = error("Cannot divide number by an expression")
 
 # Variable
 # Variable--Uncertain
@@ -333,6 +338,16 @@ end
 (-)(lhs::Variable, rhs::Uncertain) = FullAffExpr([lhs],[UAffExpr(1.)],UAffExpr(rhs,-1.))
 (*)(lhs::Variable, rhs::Uncertain) = FullAffExpr([lhs],[UAffExpr(rhs,1.0)],UAffExpr())
 (/)(lhs::Variable, rhs::Uncertain) = error("Cannot divide a variable by an uncertain")
+# Variable--UAffExpr
+(+)(lhs::Variable, rhs::UAffExpr) = FullAffExpr([lhs],[UAffExpr(1.)],    rhs)
+(-)(lhs::Variable, rhs::UAffExpr) = FullAffExpr([lhs],[UAffExpr(1.)],0.0-rhs)
+(*)(lhs::Variable, rhs::UAffExpr) = FullAffExpr([lhs],[rhs],UAffExpr())
+(/)(lhs::Variable, rhs::UAffExpr) = error("Cannot divide a variable by an expression")
+# Variable--FullAffExpr
+(+)(lhs::Variable, rhs::FullAffExpr) = FullAffExpr(vcat(rhs.vars,lhs),vcat(rhs.coeffs,UAffExpr(1.)), rhs.constant)
+(-)(lhs::Variable, rhs::FullAffExpr) = FullAffExpr(vcat(rhs.vars,lhs),vcat([0.0-rhs.coeffs[i] for i=1:length(rhs.coeffs)],UAffExpr(1.)),0.0-rhs.constant)
+(*)(lhs::Variable, rhs::FullAffExpr) = error("Cannot multiply variable and expression")
+(/)(lhs::Variable, rhs::FullAffExpr) = error("Cannot divide variable by expression")
 
 # AffExpr
 # AffExpr--Uncertain
