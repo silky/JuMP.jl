@@ -65,7 +65,44 @@ faff = FullAffExpr([x],[UAffExpr([a],[5.],1.)],UAffExpr([b],[2.],3.))
 @test affToStr(aff * a) == "(7.1 a) x + 2.5 a"
 @test_throws aff / a
 # AffExpr--UAffExpr
-println(affToStr(aff + uaff))
-println(affToStr(aff - uaff))
-println(affToStr(aff * uaff))
+@test affToStr(aff + uaff) == "(7.1) x + 2.3 a + 8.0"
+@test affToStr(aff - uaff) == "(7.1) x + -2.3 a + -3.0"
+@test affToStr(aff * uaff) == "(16.33 a + 39.05) x + 5.75 a + 13.75"
 @test_throws aff / uaff
+# AffExpr--FullAffExpr
+@test affToStr(aff + faff) == "(7.1) x + (5.0 a + 1.0) x + 2.0 b + 5.5"
+@test affToStr(aff - faff) == "(7.1) x + (-5.0 a + -1.0) x + -2.0 b + -0.5"
+@test_throws aff * faff
+@test_throws aff / faff
+
+# 6. Uncertain test
+# Uncertain--Number
+@test affToStr(a + 4.13) == "1.0 a + 4.13"
+@test affToStr(a - 3.16) == "1.0 a + -3.16"
+@test affToStr(a * 5.23) == "5.23 a"
+@test affToStr(a / 2.0) == "0.5 a"
+# Uncertain--Variable
+@test affToStr(a + x) == "(1.0) x + 1.0 a"
+@test affToStr(a - x) == "(-1.0) x + 1.0 a"
+@test affToStr(a * x) == "(1.0 a) x + 0.0"
+@test_throws affToStr(a / x)
+# Uncertain--AffExpr
+@test affToStr(a + aff) == "(7.1) x + 1.0 a + 2.5"
+@test affToStr(a - aff) == "(-7.1) x + 1.0 a + -2.5"
+@test affToStr(a * aff) == "(7.1 a) x + 2.5 a"
+@test_throws a / aff
+# Uncertain--Uncertain
+@test affToStr(a + b) == "1.0 a + 1.0 b"
+@test affToStr(a - b) == "1.0 a + -1.0 b"
+@test_throws a * b
+@test_throws a / b
+# Uncertain--UAffExpr (uaff = 2.3 * a + 5.5)
+@test affToStr(b + uaff) == "1.0 b + 2.3 a + 5.5"
+@test affToStr(b - uaff) == "1.0 b + -2.3 a + -5.5"
+@test_throws b * uaff
+@test_throws b / uaff
+# Uncertain--FullAffExpr (faff = (5a + 1)x + 2b + 3)
+@test affToStr(a + faff) == "(5.0 a + 1.0) x + 1.0 a + 2.0 b + 3.0"
+@test affToStr(a - faff) == "(-5.0 a + -1.0) x + 1.0 a + -2.0 b + -3.0"
+@test_throws a * faff
+@test_throws b * faff
