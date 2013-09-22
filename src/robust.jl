@@ -37,13 +37,49 @@ function RobustModel(sense::Symbol)
   if (sense != :Max && sense != :Min)
      error("Model sense must be :Max or :Min")
   end
-  RobustModel(QuadExpr(),sense,
+  RobustModel(AffExpr(),sense,
               LinearConstraint[],Any[],Any[],
               0,String[],Float64[],Float64[],Int[],
               0,String[],Float64[],Float64[],
               0,Float64[],Float64[],nothing,Dict())
 end
 
+# Pretty print
+function print(io::IO, m::RobustModel)
+  println(io, string(m.objSense," ",affToStr(m.obj)))
+  println(io, "Subject to: ")
+  println(io, "Constraints with no uncertainties:")
+  for c in m.certainconstr
+    println(io, conToStr(c))
+  end
+  println(io, "Constraints with uncertainties:")
+  for c in m.uncertainconstr
+    println(io, conToStr(c))
+  end
+  println(io, "Uncertainty set:")
+  for c in m.uncertaintyset
+    println(io, conToStr(c))
+  end
+  for i in 1:m.numUncs
+    print(io, m.uncLower[i])
+    print(io, " <= ")
+    print(io, (m.uncNames[i] == "" ? string("_unc",i) : m.uncNames[i]))
+    print(io, " <= ")
+    println(io, m.uncUpper[i])
+  end
+
+  println(io, "Variable bounds:")
+  for i in 1:m.numCols
+    print(io, m.colLower[i])
+    print(io, " <= ")
+    print(io, (m.colNames[i] == "" ? string("_col",i) : m.colNames[i]))
+    print(io, " <= ")
+    println(io, m.colUpper[i])
+  end
+end
+
+
+# Variable class
 function Variable(m::RobustModel,lower::Number,upper::Number,cat::Int,name::String)
   m.numCols += 1
   push!(m.colNames, name)
@@ -198,7 +234,8 @@ UncSetConstraint(terms::UAffExpr,lb::Number,ub::Number) =
 
 function addConstraint(m::RobustModel, c::UncSetConstraint)
   push!(m.uncertaintyset,c)
-  return ConstraintRef{UncSetConstraint}(m,length(m.uncertaintyset))
+  #TODO: Hack
+  #return ConstraintRef{UncSetConstraint}(m,length(m.uncertaintyset))
 end
 
 print(io::IO, c::UncSetConstraint) = print(io, conToStr(c))
@@ -254,7 +291,8 @@ UncConstraint(terms::FullAffExpr,lb::Number,ub::Number) =
 
 function addConstraint(m::RobustModel, c::UncConstraint)
   push!(m.uncertainconstr,c)
-  return ConstraintRef{UncConstraint}(m,length(m.uncertainconstr))
+  # TODO: HACK
+  #return ConstraintRef{UncConstraint}(Model(:Max),length(m.uncertainconstr))
 end
 
 print(io::IO, c::UncConstraint) = print(io, conToStr(c))
@@ -301,7 +339,8 @@ end
 # An affine expression with lower bound (possibly -Inf) and upper bound (possibly Inf).
 function addConstraint(m::RobustModel, c::LinearConstraint)
   push!(m.certainconstr,c)
-  return ConstraintRef{LinearConstraint}(m,length(m.certainconstr))
+  # TODO this is broken because ConstraintRef expects Model
+  return ConstraintRef{LinearConstraint}(Model(:Max),length(m.certainconstr))
 end
 
 ###########################################################
