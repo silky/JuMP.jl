@@ -445,18 +445,63 @@ end
 (-)(lhs::UAffExpr, rhs::Number) = (+)(-rhs,lhs)
 (*)(lhs::UAffExpr, rhs::Number) = (*)( rhs,lhs)
 (/)(lhs::UAffExpr, rhs::Number) = (*)(1.0/rhs,lhs)
-# UAffExpr--Number
 # UAffExpr--Variable
+(+)(lhs::UAffExpr, rhs::Variable) = (+)(rhs,lhs)
+(-)(lhs::UAffExpr, rhs::Variable) = FullAffExpr([rhs],[UAffExpr(-1.)],lhs)
+(*)(lhs::UAffExpr, rhs::Variable) = (*)(rhs,lhs)
+(/)(lhs::UAffExpr, rhs::Variable) = error("Cannot divide by variable")
 # UAffExpr--AffExpr
+(+)(lhs::UAffExpr, rhs::AffExpr) = (+)(rhs,lhs)
+(-)(lhs::UAffExpr, rhs::AffExpr) = (+)(0.0-rhs,lhs)
+(*)(lhs::UAffExpr, rhs::AffExpr) = (*)(rhs,lhs)
+(/)(lhs::UAffExpr, rhs::AffExpr) = error("Cannot divide by affine expression")
 # UAffExpr--Uncertain
+(+)(lhs::UAffExpr, rhs::Uncertain) = (+)(rhs,lhs)
+(-)(lhs::UAffExpr, rhs::Uncertain) = UAffExpr([rhs,lhs.uncs],[-1.0,lhs.coeffs],lhs.constant)
+(*)(lhs::UAffExpr, rhs::Uncertain) = (*)(rhs,lhs)
+(/)(lhs::UAffExpr, rhs::Uncertain) = error("Cannot divide by uncertain")
 # UAffExpr--UAffExpr
+(+)(lhs::UAffExpr, rhs::UAffExpr) = UAffExpr([lhs.uncs,rhs.uncs],[lhs.coeffs,rhs.coeffs],lhs.constant+rhs.constant)
+(-)(lhs::UAffExpr, rhs::UAffExpr) = UAffExpr([lhs.uncs,rhs.uncs],[lhs.coeffs,-rhs.coeffs],lhs.constant-rhs.constant)
+(*)(lhs::UAffExpr, rhs::UAffExpr) = error("Cannot multiply two expressions")
+(/)(lhs::UAffExpr, rhs::UAffExpr) = error("Cannot divide two expressions")
 # UAffExpr--FullAffExpr
+(+)(lhs::UAffExpr, rhs::FullAffExpr) = FullAffExpr(rhs.vars,rhs.coeffs,lhs+rhs.constant)
+(-)(lhs::UAffExpr, rhs::FullAffExpr) = FullAffExpr(rhs.vars,[0.0-c for c in rhs.coeffs],lhs-rhs.constant)
+(*)(lhs::UAffExpr, rhs::FullAffExpr) = error("Cannot multiply two expressions")
+(/)(lhs::UAffExpr, rhs::FullAffExpr) = error("Cannot divide two expressions")
 
 # FullAffExpr
 # FullAffExpr--Number
+(+)(lhs::FullAffExpr, rhs::Number) = (+)(+rhs,lhs)
+(-)(lhs::FullAffExpr, rhs::Number) = (+)(-rhs,lhs)
+(*)(lhs::FullAffExpr, rhs::Number) = (*)(rhs,lhs)
+(/)(lhs::FullAffExpr, rhs::Number) = (*)(1.0/rhs,lhs)
 # FullAffExpr--Variable
+(+)(lhs::FullAffExpr, rhs::Variable) = (+)(rhs,lhs)
+(-)(lhs::FullAffExpr, rhs::Variable) = FullAffExpr(vcat(lhs.vars,rhs),vcat(lhs.coeffs,UAffExpr(-1.)), lhs.constant)
+(*)(lhs::FullAffExpr, rhs::Variable) = error("Cannot")
+(/)(lhs::FullAffExpr, rhs::Variable) = error("Cannot")
 # FullAffExpr--AffExpr
+(+)(lhs::FullAffExpr, rhs::AffExpr) = (+)(rhs,lhs)
+(-)(lhs::FullAffExpr, rhs::AffExpr) = FullAffExpr(
+  vcat(lhs.vars, rhs.vars),
+  vcat(lhs.coeffs, UAffExpr(-rhs.coeffs)),
+  lhs.constant - rhs.constant)
+(*)(lhs::FullAffExpr, rhs::AffExpr) = error("Cannot")
+(/)(lhs::FullAffExpr, rhs::AffExpr) = error("Cannot")
 # FullAffExpr--Uncertain
+(+)(lhs::FullAffExpr, rhs::Uncertain) = (+)(rhs,lhs)
+(-)(lhs::FullAffExpr, rhs::Uncertain) = FullAffExpr(copy(lhs.vars),copy(lhs.coeffs),lhs.constant-rhs)
+(*)(lhs::FullAffExpr, rhs::Uncertain) = error("Cannot")
+(/)(lhs::FullAffExpr, rhs::Uncertain) = error("Cannot")
 # FullAffExpr--UAffExpr
+(+)(lhs::FullAffExpr, rhs::UAffExpr) = (+)(rhs,lhs)
+(-)(lhs::FullAffExpr, rhs::UAffExpr) = FullAffExpr(lhs.vars,lhs.coeffs,lhs.constant-rhs)
+(*)(lhs::FullAffExpr, rhs::UAffExpr) = error("Cannot")
+(/)(lhs::FullAffExpr, rhs::UAffExpr) = error("Cannot")
 # FullAffExpr--FullAffExpr
-
+(+)(lhs::FullAffExpr, rhs::FullAffExpr) = FullAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,rhs.coeffs),lhs.constant+rhs.constant)
+(-)(lhs::FullAffExpr, rhs::FullAffExpr) = FullAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,[0.0-c for c in rhs.coeffs]),lhs.constant-rhs.constant)
+(*)(lhs::FullAffExpr, rhs::FullAffExpr) = error("Cannot")
+(/)(lhs::FullAffExpr, rhs::FullAffExpr) = error("Cannot")

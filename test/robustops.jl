@@ -106,3 +106,67 @@ faff = FullAffExpr([x],[UAffExpr([a],[5.],1.)],UAffExpr([b],[2.],3.))
 @test affToStr(a - faff) == "(-5.0 a + -1.0) x + 1.0 a + -2.0 b + -3.0"
 @test_throws a * faff
 @test_throws b * faff
+
+# 7. UAffExpr test (uaff = 2.3 * a + 5.5)
+# UAffExpr--Number
+@test affToStr(uaff + 4.0) == "2.3 a + 9.5"
+@test affToStr(uaff - 3.0) == "2.3 a + 2.5"
+@test affToStr(uaff * 2.0) == "4.6 a + 11.0"
+@test affToStr(uaff / 2.0) == "1.15 a + 2.75"
+# UAffExpr--Variable
+@test affToStr(uaff + x) == "(1.0) x + 2.3 a + 5.5"
+@test affToStr(uaff - x) == "(-1.0) x + 2.3 a + 5.5"
+@test affToStr(uaff * x) == "(2.3 a + 5.5) x + 0.0"
+@test_throws uaff / x
+# UAffExpr--AffExpr (aff = 7.1 x + 2.5)
+@test affToStr(uaff + aff) == "(7.1) x + 2.3 a + 8.0"
+@test affToStr(uaff - aff) == "(-7.1) x + 2.3 a + 3.0"
+@test affToStr(uaff * aff) == "(16.33 a + 39.05) x + 5.75 a + 13.75"
+@test_throws uaff / aff
+# UAffExpr--Uncertain
+@test affToStr(uaff + b) == "1.0 b + 2.3 a + 5.5"
+@test affToStr(uaff - b) == "-1.0 b + 2.3 a + 5.5"
+@test_throws uaff * b
+@test_throws uaff / b
+# UAffExpr--UAffExpr (uaff2 = 3.4 b + 1.1)
+@test affToStr(uaff + uaff2) == "2.3 a + 3.4 b + 6.6"
+@test affToStr(uaff - uaff2) == "2.3 a + -3.4 b + 4.4"
+@test_throws uaff * uaff2
+@test_throws uaff / uaff2
+# UAffExpr--FullAffExpr (faff = (5a + 1)x + 2b + 3)
+@test affToStr(uaff + faff) == "(5.0 a + 1.0) x + 2.3 a + 2.0 b + 8.5"
+@test affToStr(uaff - faff) == "(-5.0 a + -1.0) x + 2.3 a + -2.0 b + 2.5"
+@test_throws uaff * faff
+@test_throws uaff / faff
+
+# 8. FullAffExpr test (faff = (5a + 1)x + 2b + 3)
+# FullAffExpr--Number
+@test affToStr(faff + 4.0) == "(5.0 a + 1.0) x + 2.0 b + 7.0"
+@test affToStr(faff - 2.0) == "(5.0 a + 1.0) x + 2.0 b + 1.0"
+@test affToStr(faff * 2.0) == "(10.0 a + 2.0) x + 4.0 b + 6.0"
+@test affToStr(faff / 2.0) == "(2.5 a + 0.5) x + 1.0 b + 1.5"
+# FullAffExpr--Variable
+@test affToStr(faff + y) == "(5.0 a + 1.0) x + (1.0) y + 2.0 b + 3.0"
+@test affToStr(faff - y) == "(5.0 a + 1.0) x + (-1.0) y + 2.0 b + 3.0"
+@test_throws faff * y
+@test_throws faff / y
+# FullAffExpr--AffExpr (aff2 = 1.2y + 1.2)
+@test affToStr(faff + aff2) == "(1.2) y + (5.0 a + 1.0) x + 2.0 b + 4.2"
+@test affToStr(faff - aff2) == "(5.0 a + 1.0) x + (-1.2) y + 2.0 b + 1.8"
+@test_throws faff * aff2
+@test_throws faff / aff2
+# FullAffExpr--Uncertain
+@test affToStr(faff + a) == "(5.0 a + 1.0) x + 1.0 a + 2.0 b + 3.0"
+@test affToStr(faff - a) == "(5.0 a + 1.0) x + -1.0 a + 2.0 b + 3.0"
+@test_throws faff * a
+@test_throws faff / a
+# FullAffExpr--UAffExpr (uaff = 2.3 * a + 5.5)
+println(faff + uaff) == "(5.0 a + 1.0) x + 2.3 a + 2.0 b + 8.5"
+println(faff - uaff) == "(5.0 a + 1.0) x + 2.0 b + -2.3 a + -2.5"
+@test_throws faff * uaff
+@test_throws faff / uaff
+# FullAffExpr--FullAffExpr
+println(faff + faff) == "(5.0 a + 1.0) x + (5.0 a + 1.0) x + 4.0 b + 6.0"
+println(faff - faff) == "(5.0 a + 1.0) x + (-5.0 a + -1.0) x + 1.0e-50 b"
+@test_throws faff * faff
+@test_throws faff / faff
