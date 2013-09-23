@@ -127,6 +127,13 @@ function solve(m::RobustModel)
   master.colCat = m.colCat
   mastervars = [Variable(master, i) for i = 1:m.numCols]
 
+  # As a more general question, need to figure out a principled way of putting
+  # box around original solution, or doing something when original solution is unbounded.
+  for j in 1:master.numCols
+    master.colLower[j] = max(master.colLower[j], -10000)
+    master.colUpper[j] = min(master.colUpper[j], +10000)
+  end
+
   println("INITIAL MASTER")
   println(master)
   println("END MASTER")
@@ -140,7 +147,7 @@ function solve(m::RobustModel)
     # Solve master
     master_status = solve(master)
     println("Solved master")
-    println("INITIAL MASTER")
+    println("CURRENT MASTER")
     println(master)
     println("END MASTER")
     println("Master solution:")
@@ -151,4 +158,8 @@ function solve(m::RobustModel)
       generateCut(oracles[i], master)
     end
   end
+
+  # Return solution
+  m.colVal = master.colVal
+  m.objVal = master.objVal
 end
