@@ -544,3 +544,6 @@ end
 (-)(lhs::FullAffExpr, rhs::FullAffExpr) = FullAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,[0.0-c for c in rhs.coeffs]),lhs.constant-rhs.constant)
 (*)(lhs::FullAffExpr, rhs::FullAffExpr) = error("Cannot")
 (/)(lhs::FullAffExpr, rhs::FullAffExpr) = error("Cannot")
+
+
+include("robustsolve.jl")
