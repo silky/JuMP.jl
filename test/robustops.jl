@@ -161,12 +161,12 @@ faff = FullAffExpr([x],[UAffExpr([a],[5.],1.)],UAffExpr([b],[2.],3.))
 @test_throws faff * a
 @test_throws faff / a
 # FullAffExpr--UAffExpr (uaff = 2.3 * a + 5.5)
-println(faff + uaff) == "(5.0 a + 1.0) x + 2.3 a + 2.0 b + 8.5"
-println(faff - uaff) == "(5.0 a + 1.0) x + 2.0 b + -2.3 a + -2.5"
+@test affToStr(faff + uaff) == "(5.0 a + 1.0) x + 2.3 a + 2.0 b + 8.5"
+@test affToStr(faff - uaff) == "(5.0 a + 1.0) x + 2.0 b + -2.3 a + -2.5"
 @test_throws faff * uaff
 @test_throws faff / uaff
 # FullAffExpr--FullAffExpr
-println(faff + faff) == "(5.0 a + 1.0) x + (5.0 a + 1.0) x + 4.0 b + 6.0"
-println(faff - faff) == "(5.0 a + 1.0) x + (-5.0 a + -1.0) x + 1.0e-50 b"
+@test affToStr(faff + faff) == "(5.0 a + 1.0) x + (5.0 a + 1.0) x + 4.0 b + 6.0"
+@test affToStr(faff - faff) == "(5.0 a + 1.0) x + (-5.0 a + -1.0) x + 1.0e-50 b"
 @test_throws faff * faff
 @test_throws faff / faff
