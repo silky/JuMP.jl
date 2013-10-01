@@ -18,10 +18,12 @@ end
 function LPRobustOracle(m::RobustModel, con::UncConstraint)
   # Create a Model for this cutting LP
   cutting = Model(:Min)
+  
   # The objective sense is based on the sense of the constraint
   if sense(con) == :<=
     cutting.objSense = :Max
   end
+
   # Copy uncertainty set from original problem
   cutting.numCols = m.numUncs
   cutting.colNames = m.uncNames
@@ -29,6 +31,14 @@ function LPRobustOracle(m::RobustModel, con::UncConstraint)
   cutting.colUpper = m.uncUpper
   cutting.colCat = zeros(m.numUncs)
   cutvars = [Variable(cutting, i) for i = 1:m.numUncs]
+  for c in m.uncertaintyset
+    # Con is in terms of "uncs" in m
+    # Coefficients are the same, but variables are not
+    newcon = LinearConstraint(AffExpr(),c.lb,c.ub)
+    newcon.terms.coeffs = c.terms.coeffs
+    newcon.terms.vars = [cutvars[u.unc] for u in c.terms.uncs]
+    push!(cutting.linconstr, newcon)
+  end
 
   # Build up map from master solution to cutting objective
   terms = con.terms
