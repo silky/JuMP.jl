@@ -66,6 +66,7 @@ type Model
   colLower::Vector{Float64}
   colUpper::Vector{Float64}
   colCat::Vector{Int}
+  colSyms
   
   # Solution data
   objVal
@@ -85,7 +86,7 @@ function Model(sense::Symbol;lpsolver=MathProgBase.defaultLPsolver,mipsolver=Mat
      error("Model sense must be :Max or :Min")
   end
   Model(QuadExpr(),sense,LinearConstraint[], QuadConstraint[],
-        0,String[],Float64[],Float64[],Int[],
+        0,String[],Float64[],Float64[],Int[],Any[],
         0,Float64[],Float64[],Float64[],nothing,lpsolver,mipsolver)
 end
 
@@ -101,7 +102,9 @@ function setObjectiveSense(m::Model, newSense::Symbol)
   m.objSense = newSense
 end
 
-# Pretty print
+#------------------------------------------------------------------------------
+# Pretty printers
+# Full print
 function print(io::IO, m::Model)
   println(io, string(m.objSense," ",quadToStr(m.obj)))
   println(io, "Subject to: ")
@@ -119,9 +122,51 @@ function print(io::IO, m::Model)
     println(io, m.colUpper[i])
   end
 end
-show(io::IO, m::Model) = print(m.objSense == :Max ? "Maximization problem" :
+# REPL (usually only gets called at model creation time)
+show(io::IO, m::Model) = print(io, m.objSense == :Max ? "Maximization problem" :
                                                      "Minimization problem") 
-                                                     # What looks good here?
+# IJulia
+function writemime(io::IO, ::MIME"text/latex", m::Model)
+  println(io, "\$\$")  # Begin MathJax mode
+  println(io, "\\begin{alignat*}{1}")
+  # Objective
+  if m.objSense == :Max
+    print(io, "\\max \\quad &")
+  else
+    print(io, "\\min \\quad &")
+  end
+  print(io, quadToStr(m.obj))
+  println(io, "\\\\")
+  # Constraints
+  print(io, "\\text{Subject to} \\quad")
+  for c in m.linconstr
+    println(io, "& $(conToStr(c,true)) \\\\")
+  end
+  # Bounds
+  for i in 1:m.numCols
+    if m.colSyms[i] == nothing
+      # This variable was probably given an explicit name, leave as-is
+    elseif typeof(m.colSyms[i]) == Int
+      # Part of a set of columns
+      # Don't touch this
+      continue
+    else
+      # Was a set of variables
+      print(io, "& ")
+      print(io, string(m.colSyms[i]))
+      println(io, " \\\\")
+      continue
+    end
+    print(io, "& ")
+    print(io, m.colLower[i] == -Inf ? "-\\inf" : m.colLower[i])
+    print(io, " \\leq ")
+    print(io, (m.colNames[i] == "" ? string("\\_col",i) : m.colNames[i]))
+    print(io, " \\leq ")
+    print(io, m.colUpper[i] == Inf ? "\\inf" : m.colUpper[i])
+    println(io, " \\\\")
+  end
+  print(io, "\\end{alignat*}\n\$\$")
+end
 
 ###############################################################################
 # Variable class
@@ -131,12 +176,13 @@ type Variable
   col::Int
 end
 
-function Variable(m::Model,lower::Number,upper::Number,cat::Int,name::String)
+function Variable(m::Model,lower::Number,upper::Number,cat::Int,name::String,sym=nothing)
   m.numCols += 1
   push!(m.colNames, name)
   push!(m.colLower, convert(Float64,lower))
   push!(m.colUpper, convert(Float64,upper))
   push!(m.colCat, cat)
+  push!(m.colSyms, sym)
   return Variable(m, m.numCols)
 end
 
@@ -149,6 +195,7 @@ getName(v::Variable) = (v.m.colNames[v.col] == "" ? string("_col",v.col) : v.m.c
 getName(m::Model, col) = (m.colNames[col] == "" ? string("_col",col) : m.colNames[col])
 print(io::IO, v::Variable) = print(io, getName(v))
 show(io::IO, v::Variable) = print(io, getName(v))
+writemime(io::IO, ::MIME"text/latex", v::Variable) = print(io, "\$\$$(getName(v))\$\$")
 
 # Bound setter/getters
 setLower(v::Variable,lower::Number) = (v.m.colLower[v.col] = convert(Float64,lower))
@@ -188,6 +235,7 @@ end
 
 print(io::IO, a::AffExpr) = print(io, affToStr(a))
 show(io::IO, a::AffExpr) = print(io, affToStr(a))
+writemime(io::IO, a::AffExpr) = print(io, "\$\$$(affToStr(a))\$\$")
 
 function affToStr(a::AffExpr, showConstant=true)
   if length(a.vars) == 0
@@ -253,10 +301,13 @@ setObjective(m::Model, q::QuadExpr) = (m.obj = q)
 print(io::IO, q::QuadExpr) = print(io, quadToStr(q))
 show(io::IO, q::QuadExpr) = print(io, quadToStr(q))
 
-function quadToStr(q::QuadExpr)
+function quadToStr(q::QuadExpr,latex=false)
   if length(q.qvars1) == 0
     return affToStr(q.aff)
   end
+
+  square::UTF8String = latex ? "^2" : "²"
+  prod::UTF8String = latex ? "\\cdot" : "*"
 
   termStrings = Array(UTF8String, 2*length(q.qvars1))
   if length(q.qvars1) > 0
@@ -276,11 +327,11 @@ function quadToStr(q::QuadExpr)
       if q.qvars1[ind].col == q.qvars2[ind].col
         # Squared term
         termStrings[2*ind] = string(abs(q.qcoeffs[ind])," ",
-                                    getName(q.qvars1[ind]),"²")
+                                    getName(q.qvars1[ind]), square)
       else
         # Normal term
         termStrings[2*ind] = string(abs(q.qcoeffs[ind])," ",
-                                    getName(q.qvars1[ind]),"*",
+                                    getName(q.qvars1[ind]), prod,
                                     getName(q.qvars2[ind]))
       end
     end
@@ -323,6 +374,7 @@ end
 
 print(io::IO, c::LinearConstraint) = print(io, conToStr(c))
 show(io::IO, c::LinearConstraint) = print(io, conToStr(c))
+writemime(io::IO, ::MIME"text/latex", c::LinearConstraint) = print(io, string("\$\$",conToStr(c,true),"\$\$"))
 
 function sense(c::LinearConstraint) 
   if c.lb != -Inf
@@ -351,12 +403,24 @@ function rhs(c::LinearConstraint)
   end
 end
 
-function conToStr(c::LinearConstraint)
+function conToStr(c::LinearConstraint, latex=false)
   s = sense(c)
-  if s == :range
-    return string(c.lb," <= ",affToStr(c.terms,false)," <= ",c.ub)
+  if latex
+    if s == :range
+      return string(c.lb," \\leq ",affToStr(c.terms,false)," \\leq ",c.ub)
+    elseif s == :<=
+      return string(affToStr(c.terms,false)," \\leq ",rhs(c))
+    elseif s == :>=
+      return string(affToStr(c.terms,false)," \\geq ",rhs(c))
+    else
+      return string(affToStr(c.terms,false)," = ",rhs(c))
+    end
   else
-    return string(affToStr(c.terms,false)," ",s," ",rhs(c))
+    if s == :range
+      return string(c.lb," <= ",affToStr(c.terms,false)," <= ",c.ub)
+    else
+      return string(affToStr(c.terms,false)," ",s," ",rhs(c))
+    end
   end
 end
 
@@ -392,6 +456,7 @@ getDual(c::ConstraintRef{LinearConstraint}) = c.m.linconstrDuals[c.idx]
 print(io::IO, c::ConstraintRef{LinearConstraint}) = print(io, conToStr(c.m.linconstr[c.idx]))
 print(io::IO, c::ConstraintRef{QuadConstraint}) = print(io, conToStr(c.m.quadconstr[c.idx]))
 show{T}(io::IO, c::ConstraintRef{T}) = print(io, c)
+writemime(io::IO, ::MIME"text/latex", c::ConstraintRef{LinearConstraint}) = print(io, string("\$\$",conToStr(c.m.linconstr[c.idx], true),"\$\$"))
 
 ##########################################################################
 # Operator overloads

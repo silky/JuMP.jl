@@ -224,10 +224,18 @@ macro defVar(m, x, extra...)
             push!(refcall.args, idxvar)
         end
         code = :( $(refcall) = Variable($m, $lb, $ub, $t) )
+        varexpr = x
         for (idxvar, idxset) in zip(reverse(idxvars),reverse(idxsets))
             code = quote
+              # BEGIN CRAZINESS
+                mysecretjumpvar = 0
                 for $idxvar in $idxset
-                    $code
+                    if mysecretjumpvar == 0
+                      $(refcall) = Variable($m, $lb, $ub, $t, "", :xexpr)
+                      mysecretjumpvar = $(refcall).col
+                    else
+                      $(refcall) = Variable($m, $lb, $ub, $t, "", mysecretjumpvar)
+                    end
                 end
             end
         end
