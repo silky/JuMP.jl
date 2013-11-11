@@ -581,7 +581,7 @@ include("solvers.jl")
 # Macros - @defVar, sum{}, etc.
 include("macros.jl")
 # Robust stuff
-include("robust.jl")
+include("robust/robust.jl")
 
 ##########################################################################
 end
