@@ -1,10 +1,8 @@
-###############################################################################
+#############################################################################
 # JuMP
-# A MILP+QP modelling langauge for Julia
-#
-# By Iain Dunning and Miles Lubin
-# http://www.github.com/IainNZ/JuMP.jl
-###############################################################################
+# An algebraic modelling langauge for Julia
+# See http://github.com/JuliaOpt/JuMP.jl
+#############################################################################
 
 import Base.getindex
 import Base.setindex!
@@ -15,27 +13,26 @@ module JuMP
 
 # Use the standard solver interface for LPs and MIPs
 using MathProgBase
-require(joinpath(Pkg.dir("MathProgBase"),"src","LinprogSolverInterface.jl"))
-using LinprogSolverInterface
+require(joinpath(Pkg.dir("MathProgBase"),"src","MathProgSolverInterface.jl"))
+using MathProgSolverInterface
 
 importall Base
 
 export
 # Objects
-  Model, Variable, AffExpr, QuadExpr, LinearConstraint, MultivarDict,
-
+  Model, Variable, AffExpr, QuadExpr, LinearConstraint, QuadConstraint, MultivarDict,
 # Functions
   # Relevant to all
   print,show,
   # Model related
   getNumVars, getNumConstraints, getObjectiveValue, getObjective,
   getObjectiveSense, setObjectiveSense, writeLP, writeMPS, setObjective,
-  addConstraint, addVar, addVars, setLPSolver, setMIPSolver, solve,
+  addConstraint, addVar, addVars, solve, copy,
   # Variable
   setName, getName, setLower, setUpper, getLower, getUpper, getValue,
   getDual,
   # Expressions and constraints
-  affToStr, quadToStr, conToStr,
+  affToStr, quadToStr, conToStr, chgConstrRHS,
   
 # Macros and support functions
   @addConstraint, @defVar, 
@@ -59,6 +56,7 @@ type Model
   objSense::Symbol
   
   linconstr#::Vector{LinearConstraint}
+  quadconstr
   
   # Column data
   numCols::Int
@@ -74,17 +72,53 @@ type Model
   linconstrDuals::Vector{Float64}
   # internal solver model object
   internalModel
-  solverOptions
+  # Solver+option object from MathProgBase
+  solver::AbstractMathProgSolver
+  # true if we haven't solved yet
+  firstsolve::Bool
 end
 
 # Default constructor
-function Model(sense::Symbol)
-  if (sense != :Max && sense != :Min)
-     error("Model sense must be :Max or :Min")
+function Model(sense::Symbol;lpsolver=MathProgBase.defaultLPsolver,mipsolver=MathProgBase.defaultMIPsolver,solver=nothing)
+  Base.warn_once("Model(:$sense) syntax is deprecated. The sense should be passed to setObjective, e.g. @setObjective(model, :$sense, ...)")
+  if lpsolver != MathProgBase.defaultLPsolver || mipsolver != MathProgBase.defaultMIPsolver
+    error("lpsolver and mipsolver keywords have been merged. Use 'solver' instead, for example, Model(solver=ClpSolver())")
   end
-  Model(QuadExpr(),sense,LinearConstraint[],
-        0,String[],Float64[],Float64[],Int[],
-        0,Float64[],Float64[],Float64[],nothing,Dict())
+  if solver == nothing
+    # use default solvers
+    Model(QuadExpr(),sense,LinearConstraint[], QuadConstraint[],
+          0,String[],Float64[],Float64[],Int[],
+          0,Float64[],Float64[],Float64[],nothing,MathProgBase.MissingSolver("",Symbol[]),true)
+  else
+    if !isa(solver,AbstractMathProgSolver)
+      error("solver argument ($solver) must be an AbstractMathProgSolver")
+    end
+    # user-provided solver must support problem class
+    Model(QuadExpr(),sense,LinearConstraint[], QuadConstraint[],
+          0,String[],Float64[],Float64[],Int[],
+          0,Float64[],Float64[],Float64[],nothing,solver,true)
+  end
+end
+
+function Model(;solver=nothing,lpsolver=MathProgBase.defaultLPsolver,mipsolver=MathProgBase.defaultMIPsolver)
+  if lpsolver != MathProgBase.defaultLPsolver || mipsolver != MathProgBase.defaultMIPsolver
+    error("lpsolver and mipsolver keywords have been merged. Use 'solver' instead, for example, Model(solver=ClpSolver())")
+  end
+  
+  if solver == nothing
+    # use default solvers
+    Model(QuadExpr(),:Min,LinearConstraint[], QuadConstraint[],
+          0,String[],Float64[],Float64[],Int[],
+          0,Float64[],Float64[],Float64[],nothing,MathProgBase.MissingSolver("",Symbol[]),true)
+  else
+    if !isa(solver,AbstractMathProgSolver)
+      error("solver argument ($solver) must be an AbstractMathProgSolver")
+    end
+    # user-provided solver must support problem class
+    Model(QuadExpr(),:Min,LinearConstraint[], QuadConstraint[],
+          0,String[],Float64[],Float64[],Int[],
+          0,Float64[],Float64[],Float64[],nothing,solver,true)
+  end
 end
 
 # Getters/setters
@@ -106,6 +140,9 @@ function print(io::IO, m::Model)
   for c in m.linconstr
     println(io, conToStr(c))
   end
+  for c in m.quadconstr
+    println(io, conToStr(c))
+  end
   for i in 1:m.numCols
     print(io, m.colLower[i])
     print(io, " <= ")
@@ -117,6 +154,30 @@ end
 show(io::IO, m::Model) = print(m.objSense == :Max ? "Maximization problem" :
                                                      "Minimization problem") 
                                                      # What looks good here?
+
+# Deep copy the model
+function copy(source::Model)
+  
+  dest = Model()
+  dest.solver = source.solver  # The two models are linked by this
+  
+  # Objective
+  dest.obj = copy(source.obj, dest)
+  dest.objSense = source.objSense
+
+  # Constraints
+  dest.linconstr = [copy(c, dest) for c in source.linconstr]
+  dest.quadconstr = [copy(c, dest) for c in source.quadconstr]
+
+  # Variables
+  dest.numCols = source.numCols
+  dest.colNames = source.colNames[:]
+  dest.colLower = source.colLower[:]
+  dest.colUpper = source.colUpper[:]
+  dest.colCat = source.colCat[:]
+
+  return dest
+end
 
 ###############################################################################
 # Variable class
@@ -132,11 +193,14 @@ function Variable(m::Model,lower::Number,upper::Number,cat::Int,name::String)
   push!(m.colLower, convert(Float64,lower))
   push!(m.colUpper, convert(Float64,upper))
   push!(m.colCat, cat)
+  push!(m.colVal,NaN)
   return Variable(m, m.numCols)
 end
 
 Variable(m::Model,lower::Number,upper::Number,cat::Int) =
   Variable(m,lower,upper,cat,"")
+
+
 
 # Name setter/getters
 setName(v::Variable,n::String) = (v.m.colNames[v.col] = n)
@@ -153,28 +217,45 @@ getUpper(v::Variable) = v.m.colUpper[v.col]
 
 # Value setter/getter
 function setValue(v::Variable, val::Number)
-    if length(v.m.colVal) < v.col
-        resize!(v.m.colVal,v.m.numCols)
-    end
-    v.m.colVal[v.col] = val
+  v.m.colVal[v.col] = val
 end
-getValue(v::Variable) = v.m.colVal[v.col]
+
+function getValue(v::Variable) 
+  if length(v.m.colVal) < getNumVars(v.m)
+    error("Variable values not available. Check that the model was properly solved.")
+  end
+  return v.m.colVal[v.col]
+end
 
 # Dual value (reduced cost) getter
-getDual(v::Variable) = v.m.redCosts[v.col]
+function getDual(v::Variable) 
+  if length(v.m.redCosts) < getNumVars(v.m)
+    error("Variable bound duals (reduced costs) not available. Check that the model was properly solved and no integer variables are present.")
+  end
+  return v.m.redCosts[v.col]
+end
 
 ###############################################################################
-# Affine Expression class
+# Generic affine expression class
 # Holds a vector of tuples (Var, Coeff)
-type AffExpr
-  vars::Array{Variable,1}
-  coeffs::Array{Float64,1}
-  constant::Float64
+type GenericAffExpr{CoefType,VarType}
+  vars::Array{VarType,1}
+  coeffs::Array{CoefType,1}
+  constant::CoefType
 end
+
+typealias AffExpr GenericAffExpr{Float64,Variable}
 
 AffExpr() = AffExpr(Variable[],Float64[],0.)
 
 function setObjective(m::Model, a::AffExpr)
+  Base.warn_once("Calling setObjective without specifying an objective sense is deprecated. Use setObjective(model, sense, expr) (or @setObjective(model, sense, expr)).")
+  m.obj = QuadExpr()
+  m.obj.aff = a
+end
+
+function setObjective(m::Model, sense::Symbol, a::AffExpr)
+  setObjectiveSense(m, sense)
   m.obj = QuadExpr()
   m.obj.aff = a
 end
@@ -184,7 +265,11 @@ show(io::IO, a::AffExpr) = print(io, affToStr(a))
 
 function affToStr(a::AffExpr, showConstant=true)
   if length(a.vars) == 0
-    return string(a.constant)
+    if showConstant
+      return string(a.constant)
+    else
+      return "0.0"
+    end
   end
 
   # Get reference to model
@@ -196,23 +281,49 @@ function affToStr(a::AffExpr, showConstant=true)
     addelt(indvec, a.vars[ind].col, a.coeffs[ind])
   end
 
-  # Stringify the terms
-  termStrings = Array(ASCIIString, length(a.vars))
-  numTerms = 0
+  elm = 0
+  termStrings = Array(UTF8String, 2*length(a.vars))
   for i in 1:indvec.nnz
     idx = indvec.nzidx[i]
-    numTerms += 1
-    termStrings[numTerms] = "$(indvec.elts[idx]) $(getName(m,idx))"
+    if abs(indvec.elts[idx]) > 1e-20
+      if elm == 0
+        elm += 1
+        termStrings[1] = "$(indvec.elts[idx]) $(getName(m,idx))"
+      else 
+        if indvec.elts[idx] < 0
+          termStrings[2*elm] = " - "
+        else
+          termStrings[2*elm] = " + "
+        end
+        termStrings[2*elm+1] = "$(abs(indvec.elts[idx])) $(getName(m,idx))"
+        elm += 1
+      end
+    end
   end
 
-  # And then connect them up with +s
-  ret = join(termStrings[1:numTerms], " + ")
+  if elm == 0
+    ret = "0.0"
+  else
+    # And then connect them up with +s
+    ret = join(termStrings[1:(2*elm-1)])
+  end
   
   if abs(a.constant) >= 0.000001 && showConstant
-    ret = string(ret," + ",a.constant)
+    if a.constant < 0
+      ret = string(ret, " - ", abs(a.constant))
+    else
+      ret = string(ret, " + ", a.constant)
+    end
   end
   return ret
 end
+
+# Copy utility function, not exported
+function copy(a::AffExpr, new_model::Model)
+  return AffExpr([Variable(new_model, v.col) for v in a.vars],
+                 a.coeffs[:], a.constant)
+end
+
 
 ###############################################################################
 # QuadExpr class
@@ -226,7 +337,16 @@ end
 
 QuadExpr() = QuadExpr(Variable[],Variable[],Float64[],AffExpr())
 
-setObjective(m::Model, q::QuadExpr) = (m.obj = q)
+function setObjective(m::Model, q::QuadExpr)
+  Base.warn_once("Calling setObjective without specifying an objective sense is deprecated. Use setObjective(model, sense, expr).")
+  m.obj = q
+end
+
+function setObjective(m::Model, sense::Symbol, q::QuadExpr)
+  m.obj = q
+  setObjectiveSense(m, sense)
+end
+
 
 print(io::IO, q::QuadExpr) = print(io, quadToStr(q))
 show(io::IO, q::QuadExpr) = print(io, quadToStr(q))
@@ -236,19 +356,52 @@ function quadToStr(q::QuadExpr)
     return affToStr(q.aff)
   end
 
-  termStrings = Array(ASCIIString, length(q.qvars1))
-  for ind in 1:length(q.qvars1)
-    termStrings[ind] = string(q.qcoeffs[ind]," ",
-                              getName(q.qvars1[ind]),"*",
-                              getName(q.qvars2[ind]))
+  termStrings = Array(UTF8String, 2*length(q.qvars1))
+  if length(q.qvars1) > 0
+    if q.qcoeffs[1] < 0
+      termStrings[1] = "-"
+    else
+      termStrings[1] = ""
+    end
+    for ind in 1:length(q.qvars1)
+      if ind >= 2
+        if q.qcoeffs[ind] < 0
+          termStrings[2*ind-1] = " - "
+        else 
+          termStrings[2*ind-1] = " + "
+        end
+      end
+      if q.qvars1[ind].col == q.qvars2[ind].col
+        # Squared term
+        termStrings[2*ind] = string(abs(q.qcoeffs[ind])," ",
+                                    getName(q.qvars1[ind]),"²")
+      else
+        # Normal term
+        termStrings[2*ind] = string(abs(q.qcoeffs[ind])," ",
+                                    getName(q.qvars1[ind]),"*",
+                                    getName(q.qvars2[ind]))
+      end
+    end
   end
-  ret = join(termStrings, " + ")
+  ret = join(termStrings)
 
   if q.aff.constant == 0 && length(q.aff.vars) == 0
     return ret
   else
-    return string(ret, " + ", affToStr(q.aff))
+    aff = affToStr(q.aff)
+    if aff[1] == '-'
+      return string(ret, " - ", aff[2:end])
+    else
+      return string(ret, " + ", aff)
+    end
   end
+end
+
+# Copy utility function, not exported
+function copy(q::QuadExpr, new_model::Model)
+  return QuadExpr([Variable(new_model, v.col) for v in q.qvars1],
+                  [Variable(new_model, v.col) for v in q.qvars2],
+                  q.qcoeffs[:], copy(q.aff, new_model))
 end
 
 ##########################################################################
@@ -270,6 +423,15 @@ LinearConstraint(terms::AffExpr,lb::Number,ub::Number) =
 
 function addConstraint(m::Model, c::LinearConstraint)
   push!(m.linconstr,c)
+  if !m.firstsolve
+    # TODO: we don't check for duplicates here
+    try
+      addconstr!(m.internalModel,[v.idx for v in c.terms.vars],c.terms.coeffs,c.lb,c.ub)
+    catch
+      Base.warn_once("Solver does not appear to support adding constraints to an existing model. Hot-start is disabled.")
+      m.firstsolve = true
+    end
+  end
   return ConstraintRef{LinearConstraint}(m,length(m.linconstr))
 end
 
@@ -312,6 +474,39 @@ function conToStr(c::LinearConstraint)
   end
 end
 
+# Copy utility function, not exported
+function copy(c::LinearConstraint, new_model::Model)
+  return LinearConstraint(copy(c.terms, new_model), c.lb, c.ub)
+end
+
+##########################################################################
+# QuadConstraint class
+# An quadratic constraint. Right-hand side is implicitly taken to be zero; 
+# constraint is stored in the included QuadExpr.
+type QuadConstraint <: JuMPConstraint
+  terms::QuadExpr
+  sense::Symbol
+end
+
+function addConstraint(m::Model, c::QuadConstraint)
+  push!(m.quadconstr,c)
+  if !m.firstsolve
+    # we don't (yet) support hot-starting QCQP solutions
+    m.firstsolve = true
+  end
+  return ConstraintRef{QuadConstraint}(m,length(m.quadconstr))
+end
+
+print(io::IO, c::QuadConstraint) = print(io, conToStr(c))
+show(io::IO, c::QuadConstraint)  = print(io, conToStr(c))
+
+conToStr(c::QuadConstraint) = string(quadToStr(c.terms), " ", c.sense, " 0")
+
+# Copy utility function, not exported
+function copy(c::QuadConstraint, new_model::Model)
+  return QuadConstraint(copy(c.terms, new_model), c.sense)
+end
+
 ##########################################################################
 # ConstraintRef
 # Reference to a constraint for retrieving solution info
@@ -320,7 +515,61 @@ immutable ConstraintRef{T<:JuMPConstraint}
   idx::Int
 end
 
-getDual(c::ConstraintRef{LinearConstraint}) = c.m.linconstrDuals[c.idx]
+function getDual(c::ConstraintRef{LinearConstraint}) 
+  if length(c.m.linconstrDuals) != getNumConstraints(c.m)
+    error("Dual solution not available. Check that the model was properly solved and no integer variables are present.")
+  end
+  return c.m.linconstrDuals[c.idx]
+end
+
+function chgConstrRHS(c::ConstraintRef{LinearConstraint}, rhs::Number)
+  constr = c.m.linconstr[c.idx]
+  sen = sense(constr)
+  if sen == :range
+    error("Modifying range constraints is currently unsupported.")
+  elseif sen == :(==)
+    constr.lb = float(rhs)
+    constr.ub = float(rhs)
+  elseif sen == :>=
+    constr.lb = float(rhs)
+  else
+    @assert sen == :<=
+    constr.ub = float(rhs)
+  end
+end
+
+print(io::IO, c::ConstraintRef{LinearConstraint}) = print(io, conToStr(c.m.linconstr[c.idx]))
+print(io::IO, c::ConstraintRef{QuadConstraint}) = print(io, conToStr(c.m.quadconstr[c.idx]))
+show{T}(io::IO, c::ConstraintRef{T}) = print(io, c)
+
+# add variable to existing constraints
+function Variable(m::Model,lower::Number,upper::Number,cat::Int,objcoef::Number,
+  constraints::Vector{ConstraintRef{LinearConstraint}},coefficients::Vector{Float64};
+  name::String="")
+    
+  v = Variable(m, lower, upper, cat, name)
+  # add to existing constraints
+  @assert length(constraints) == length(coefficients)
+  for i in 1:length(constraints)
+    c::LinearConstraint = m.linconstr[constraints[i].idx]
+    coef = coefficients[i]
+    push!(c.terms.vars,v)
+    push!(c.terms.coeffs,coef)
+  end
+  push!(m.obj.aff.vars, v)
+  push!(m.obj.aff.coeffs,objcoef)
+
+  if !m.firstsolve
+    try
+      addvar!(m.internalModel,Int[c.idx for c in constraints],coefficients,float(lower),float(upper),float(objcoef))
+    catch
+      Base.warn_once("Solver does not appear to support adding variables to an existing model. Hot-start is disabled.")
+      m.firstsolve = true
+    end
+  end
+
+  return v
+end
 
 ##########################################################################
 # Operator overloads

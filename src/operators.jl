@@ -1,4 +1,9 @@
-###########################################################
+#############################################################################
+# JuMP
+# An algebraic modelling langauge for Julia
+# See http://github.com/JuliaOpt/JuMP.jl
+#############################################################################
+
 # Overloads
 #
 # Different objects that must all interact:
@@ -6,7 +11,6 @@
 # 2. Variable
 # 3. AffExpr
 # 4. QuadExpr
-# 5. Constraint (for comparison ops)
 
 # Number
 # Number--Number obviously already taken care of!
@@ -15,11 +19,11 @@
 (-)(lhs::Number, rhs::Variable) = AffExpr([rhs],[-1.],convert(Float64,lhs))
 (*)(lhs::Number, rhs::Variable) = AffExpr([rhs],[convert(Float64,lhs)], 0.)
 (/)(lhs::Number, rhs::Variable) = error("Cannot divide by variable")
-# Number--AffExpr
-(+)(lhs::Number, rhs::AffExpr)  = AffExpr(copy(rhs.vars),copy(rhs.coeffs),lhs+rhs.constant)
-(-)(lhs::Number, rhs::AffExpr)  = AffExpr(copy(rhs.vars),    -rhs.coeffs ,lhs-rhs.constant)
-(*)(lhs::Number, rhs::AffExpr)  = AffExpr(copy(rhs.vars), lhs*rhs.coeffs ,lhs*rhs.constant)
-(/)(lhs::Number, rhs::AffExpr)  = error("Cannot divide by an affine expression")
+# Number--GenericAffExpr
+(+)(lhs::Number, rhs::GenericAffExpr)  = GenericAffExpr(copy(rhs.vars),copy(rhs.coeffs),lhs+rhs.constant)
+(-)(lhs::Number, rhs::GenericAffExpr)  = GenericAffExpr(copy(rhs.vars),    -rhs.coeffs ,lhs-rhs.constant)
+(*)(lhs::Number, rhs::GenericAffExpr)  = GenericAffExpr(copy(rhs.vars), lhs*rhs.coeffs ,lhs*rhs.constant)
+(/)(lhs::Number, rhs::GenericAffExpr)  = error("Cannot divide by an affine expression")
 # Number--QuadExpr
 (+)(lhs::Number, rhs::QuadExpr) = QuadExpr(copy(rhs.qvars1),copy(rhs.qvars2),copy(rhs.qcoeffs),lhs+rhs.aff)
 (-)(lhs::Number, rhs::QuadExpr) = QuadExpr(copy(rhs.qvars1),copy(rhs.qvars2),    -rhs.qcoeffs ,lhs-rhs.aff)
@@ -59,18 +63,18 @@ end
 
 # AffExpr
 # AffExpr--Number
-(+)(lhs::AffExpr, rhs::Number) = (+)(+rhs,lhs)
-(-)(lhs::AffExpr, rhs::Number) = (+)(-rhs,lhs)
-(*)(lhs::AffExpr, rhs::Number) = (*)(rhs,lhs)
-(/)(lhs::AffExpr, rhs::Number) = (*)(1.0/rhs,lhs)
+(+)(lhs::GenericAffExpr, rhs::Number) = (+)(+rhs,lhs)
+(-)(lhs::GenericAffExpr, rhs::Number) = (+)(-rhs,lhs)
+(*)(lhs::GenericAffExpr, rhs::Number) = (*)(rhs,lhs)
+(/)(lhs::GenericAffExpr, rhs::Number) = (*)(1.0/rhs,lhs)
 # AffExpr--Variable
 (+)(lhs::AffExpr, rhs::Variable) = (+)(rhs,lhs)
 (-)(lhs::AffExpr, rhs::Variable) = AffExpr(vcat(lhs.vars,rhs),vcat(+lhs.coeffs,-1.),lhs.constant)
 (*)(lhs::AffExpr, rhs::Variable) = (*)(rhs,lhs)
 (/)(lhs::AffExpr, rhs::Variable) = error("Cannot divide affine expression by a variable")
 # AffExpr--AffExpr
-(+)(lhs::AffExpr, rhs::AffExpr) = AffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs, rhs.coeffs),lhs.constant+rhs.constant)
-(-)(lhs::AffExpr, rhs::AffExpr) = AffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,-rhs.coeffs),lhs.constant-rhs.constant)
+(+)(lhs::GenericAffExpr, rhs::GenericAffExpr) = GenericAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs, rhs.coeffs),lhs.constant+rhs.constant)
+(-)(lhs::GenericAffExpr, rhs::GenericAffExpr) = GenericAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,-rhs.coeffs),lhs.constant-rhs.constant)
 function (*)(lhs::AffExpr, rhs::AffExpr)
   ret = QuadExpr(Variable[],Variable[],Float64[],AffExpr(Variable[],Float64[],0.))
 
@@ -162,21 +166,60 @@ end
 (/)(q1::QuadExpr, q2::QuadExpr) = error("Cannot divide a quadratic expression by a quadratic expression")
 
 # LinearConstraint
-# LinearConstraint--Number
-function (<=)(lhs::AffExpr, rhs::Number)
-  rhs -= lhs.constant
-  lhs.constant = 0
-  return LinearConstraint(lhs,-Inf,rhs)
-end
-function (==)(lhs::AffExpr, rhs::Number)
-  rhs -= lhs.constant
-  lhs.constant = 0
-  return LinearConstraint(lhs,rhs,rhs)
-end
-function (>=)(lhs::AffExpr, rhs::Number)
-  rhs -= lhs.constant
-  lhs.constant = 0
-  return LinearConstraint(lhs,rhs,Inf)
-end
+# Number--???
+(<=)(lhs::Number, rhs::Variable) = (>=)(rhs, lhs)
+(==)(lhs::Number, rhs::Variable) = (==)(rhs, lhs)
+(>=)(lhs::Number, rhs::Variable) = (<=)(rhs, lhs)
+
+(<=)(lhs::Number, rhs::AffExpr) = (>=)(rhs, lhs)
+(==)(lhs::Number, rhs::AffExpr) = (==)(rhs, lhs)
+(>=)(lhs::Number, rhs::AffExpr) = (<=)(rhs, lhs)
+(<=)(lhs::Number, rhs::QuadExpr) = (>=)(rhs, lhs)
+(==)(lhs::Number, rhs::QuadExpr) = (==)(rhs, lhs)
+(>=)(lhs::Number, rhs::QuadExpr) = (<=)(rhs, lhs)
+# Variable--???
+(<=)(lhs::Variable, rhs::Number) = (<=)(lhs - rhs, 0.0)
+(==)(lhs::Variable, rhs::Number) = (==)(lhs - rhs, 0.0)
+(>=)(lhs::Variable, rhs::Number) = (>=)(lhs - rhs, 0.0)
+
+(<=)(lhs::Variable, rhs::Variable) = (<=)(lhs - rhs, 0.0)
+(==)(lhs::Variable, rhs::Variable) = (==)(lhs - rhs, 0.0)
+(>=)(lhs::Variable, rhs::Variable) = (>=)(lhs - rhs, 0.0)
+
+(<=)(lhs::Variable, rhs::AffExpr) = (<=)(lhs - rhs, 0.0)
+(==)(lhs::Variable, rhs::AffExpr) = (==)(lhs - rhs, 0.0)
+(>=)(lhs::Variable, rhs::AffExpr) = (>=)(lhs - rhs, 0.0)
+(<=)(lhs::Variable, rhs::QuadExpr) = (<=)(lhs - rhs, 0.0)
+(==)(lhs::Variable, rhs::QuadExpr) = (==)(lhs - rhs, 0.0)
+(>=)(lhs::Variable, rhs::QuadExpr) = (>=)(lhs - rhs, 0.0)
+# AffExpr--???
+(<=)(lhs::AffExpr, rhs::Number) = LinearConstraint(lhs,            -Inf,rhs-lhs.constant)
+(==)(lhs::AffExpr, rhs::Number) = LinearConstraint(lhs,rhs-lhs.constant,rhs-lhs.constant)
+(>=)(lhs::AffExpr, rhs::Number) = LinearConstraint(lhs,rhs-lhs.constant,             Inf)
+(<=)(lhs::AffExpr, rhs::Variable) = (<=)(lhs-rhs, 0.0)
+(==)(lhs::AffExpr, rhs::Variable) = (==)(lhs-rhs, 0.0)
+(>=)(lhs::AffExpr, rhs::Variable) = (>=)(lhs-rhs, 0.0)
+(<=)(lhs::AffExpr, rhs::AffExpr) = (<=)(lhs-rhs, 0.0)
+(==)(lhs::AffExpr, rhs::AffExpr) = (==)(lhs-rhs, 0.0)
+(>=)(lhs::AffExpr, rhs::AffExpr) = (>=)(lhs-rhs, 0.0)
+(<=) (lhs::AffExpr, rhs::QuadExpr) = (<=)(lhs-rhs, 0)
+(==) (lhs::AffExpr, rhs::QuadExpr) = (==)(lhs-rhs, 0)
+(>=) (lhs::AffExpr, rhs::QuadExpr) = (>=)(lhs-rhs, 0)
+
 # There's no easy way to allow operator overloads for range constraints.
 # Use macros instead.
+
+# QuadConstraint
+# QuadConstraint--Number
+(<=) (lhs::QuadExpr, rhs::Number)   = QuadConstraint( QuadExpr(copy(lhs.qvars1), copy(lhs.qvars2), lhs.qcoeffs,lhs.aff - rhs), :<=   )
+(==) (lhs::QuadExpr, rhs::Number)   = QuadConstraint( QuadExpr(copy(lhs.qvars1), copy(lhs.qvars2), lhs.qcoeffs,lhs.aff - rhs), :(==) )
+(>=) (lhs::QuadExpr, rhs::Number)   = QuadConstraint( QuadExpr(copy(lhs.qvars1), copy(lhs.qvars2), lhs.qcoeffs,lhs.aff - rhs), :>=   )
+(<=) (lhs::QuadExpr, rhs::Variable) = (<=)(lhs-rhs, 0)
+(==) (lhs::QuadExpr, rhs::Variable) = (==)(lhs-rhs, 0)
+(>=) (lhs::QuadExpr, rhs::Variable) = (>=)(lhs-rhs, 0)
+(<=) (lhs::QuadExpr, rhs::AffExpr)  = (<=)(lhs-rhs, 0)
+(==) (lhs::QuadExpr, rhs::AffExpr)  = (==)(lhs-rhs, 0)
+(>=) (lhs::QuadExpr, rhs::AffExpr)  = (>=)(lhs-rhs, 0)
+(<=) (lhs::QuadExpr, rhs::QuadExpr) = (<=)(lhs-rhs, 0)
+(==) (lhs::QuadExpr, rhs::QuadExpr) = (==)(lhs-rhs, 0)
+(>=) (lhs::QuadExpr, rhs::QuadExpr) = (>=)(lhs-rhs, 0)

@@ -7,12 +7,12 @@ modPath = joinpath(Pkg.dir("JuMP"),"test","mod")
 # Test Model A
 #####################################################################
 # Build it
-modA = Model(:Max)
+modA = Model()
 @defVar(modA, x >= 0)
 @defVar(modA, y <= 5, Int)
 @defVar(modA, 2 <= z <= 4)
 @defVar(modA, 0 <= r[i=3:6] <= i)
-@setObjective(modA, ((x + y)/2.0 + 3.0)/3.0 + z + r[3])
+@setObjective(modA, Max, ((x + y)/2.0 + 3.0)/3.0 + z + r[3])
 @defConstrRef constraints[1:3]
 constraints[1] = @addConstraint(modA, 2 <= x+y <= 4)
 constraints[2] = @addConstraint(modA, sum{r[i],i=3:5} <= (2 - x)/2.0)
@@ -149,3 +149,46 @@ println("  !!TODO: test external solvers for reading LP and MPS files")
 setObjectiveSense(modA, :Min)
 @test getObjectiveSense(modA) == :Min
 
+
+#####################################################################
+# Test binary variable handling
+let
+    modB = Model()
+    @defVar(modB, x, Bin)
+    @setObjective(modB, Max, x)
+    @addConstraint(modB, x <= 10)
+    status = solve(modB)
+    @test status == :Optimal
+    @test_approx_eq getValue(x) 1.0
+end
+
+
+#####################################################################
+# Test model copying
+let
+    source = Model()
+    @defVar(source, 2 <= x <= 5)
+    @defVar(source, 0 <= y <= 1, Int)
+    @setObjective(source, Max, 3*x + 1*y)
+    @addConstraint(source, x + 2.0*y <= 6)
+    addConstraint(source, x*x <= 1)
+
+    dest = copy(source)
+
+    # Obj
+    @setObjective(source, Max, 1x)
+    @test length(source.obj.aff.coeffs) == 1
+    @test length(dest.obj.aff.coeffs) == 2
+    @setObjective(dest, Max, 1x)
+    @test length(source.obj.aff.coeffs) == 1
+    @test length(dest.obj.aff.coeffs) == 1
+    @setObjective(dest, Max, 3*x + 1*y)
+    @test length(source.obj.aff.coeffs) == 1
+    @test length(dest.obj.aff.coeffs) == 2
+
+    # Constraints
+    source.linconstr[1].ub = 5.0
+    @test dest.linconstr[1].ub == 6.0
+    source.quadconstr[1].sense == :(>=)
+    @test dest.quadconstr[1].sense == :(<=)
+end    
