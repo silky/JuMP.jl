@@ -78,6 +78,7 @@ function print(io::IO, m::RobustModel)
   end
 end
 
+getNumVars(m::RobustModel) = m.numCols
 
 # Variable class
 function Variable(m::RobustModel,lower::Number,upper::Number,cat::Int,name::String)
