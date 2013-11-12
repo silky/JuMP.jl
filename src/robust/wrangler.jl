@@ -23,10 +23,10 @@ abstract AbstractWrangler
 # of :Cut, :Reform, or :Both. If :Both, the solver will use the preferred
 querySupport(w::AbstractWrangler) = error("Not implemented")
 
-# setupCut
+# setup
 # Gives wrangler time to do any setup it needs to do based on selected mode of
 # operation and the full model.
-setup(w::AbstractWrangler, constraint, rm::RobustModel) = error("Not implemented")
+setup!(w::AbstractWrangler, sel_mode::Symbol, constraint, rm::RobustModel) = error("Not implemented")
 
 # generateCut
 # Called in the main loop every iteration, rm is the original problem and m is
@@ -57,9 +57,14 @@ SimpleLPWrangler() = SimpleLPWrangler(Model(), Variable[], nothing, nothing, not
 
 querySupport(w::SimpleLPWrangler) = :Cut
 
-function setup(w::SimpleLPWrangler, con, rm::RobustModel)
+function setup!(w::SimpleLPWrangler, sel_mode::Symbol, con, rm::RobustModel)
+  # Do no work if reformulation was selected
+  if sel_mode == :Reform
+    return
+  end
+
   # Store reference to the original constraint
-  w.con
+  w.con = con
 
   # Create an LP that we'll use to solve the cut problem
   w.cutting.objSense = sense(con) == :<= ? :Max : :Min
@@ -70,14 +75,14 @@ function setup(w::SimpleLPWrangler, con, rm::RobustModel)
   w.cutting.colLower = rm.uncLower
   w.cutting.colUpper = rm.uncUpper
   w.cutting.colCat = zeros(rm.numUncs)
-  w.cutvars = [Variable(cutting, i) for i = 1:rm.numUncs]
+  w.cutvars = [Variable(w.cutting, i) for i = 1:rm.numUncs]
   for c in rm.uncertaintyset
     # Con is in terms of "uncs" in rm
     # Coefficients are the same, but variables are not
     newcon = LinearConstraint(AffExpr(), c.lb, c.ub)
     newcon.terms.coeffs = c.terms.coeffs
-    newcon.terms.vars = [cutvars[u.unc] for u in c.terms.uncs]
-    push!(cutting.linconstr, newcon)
+    newcon.terms.vars = [w.cutvars[u.unc] for u in c.terms.uncs]
+    push!(w.cutting.linconstr, newcon)
   end
 
   # Build up a map from the master solution to the cut objective
@@ -114,15 +119,15 @@ function generateCut(w::SimpleLPWrangler, m::Model)
   # Accumulate the coefficients for each uncertaint
   num_uncs = w.cutting.numCols
   unc_coeffs = zeros(num_uncs)
-  for key in keys(oracle.var_map)  # For every var in original con
-    for pair in oracle.var_map[key]  # For every uncertain applied to that var
+  for key in keys(w.var_map)  # For every var in original con
+    for pair in w.var_map[key]  # For every uncertain applied to that var
       unc_coeffs[pair[1]] += pair[2]*master_sol[key]
     end
   end
-    for pair in oracle.constant_coeffs
+    for pair in w.constant_coeffs
       unc_coeffs[pair[1]] += pair[2]
     end
-  @setObjective(w.cutting, w.objSense, sum{unc_coeffs[i]*w.cutvars[i], i = 1:num_uncs})
+  @setObjective(w.cutting, w.cutting.objSense, sum{unc_coeffs[i]*w.cutvars[i], i = 1:num_uncs})
 
   # Solve it
   #println("CUT FOR CON: $(conToStr(oracle.con))")
@@ -137,7 +142,7 @@ function generateCut(w::SimpleLPWrangler, m::Model)
   # TODO: Build map for this too
   num_vars = length(w.con.terms.vars)
   aff = AffExpr( w.con.terms.vars,
-                [w.con.terms.coeffs[i].constant for i in 1:num_vars],
+                float([w.con.terms.coeffs[i].constant for i in 1:num_vars]),
                  w.con.terms.constant.constant)
   # Variable part
   for var_ind = 1:num_vars
@@ -150,7 +155,7 @@ function generateCut(w::SimpleLPWrangler, m::Model)
     end
   end
   # Non variable part
-    coeff::UAffExpr = w.con.terms.constant
+    coeff = w.con.terms.constant
     num_uncs = length(coeff.uncs)
     for unc_ind = 1:num_uncs
       coeff_unc = coeff.uncs[unc_ind]
@@ -158,7 +163,16 @@ function generateCut(w::SimpleLPWrangler, m::Model)
       aff.constant += w.cutting.colVal[coeff_unc.unc] * coeff_coeff[unc_ind]
     end
 
-  @addConstraint(m, w.con.lb <= aff <= w.con.ub)
+  if w.con.lb == -Inf
+    # LEQ constriant
+    @addConstraint(m, aff <= w.con.ub)
+  elseif w.con.ub == +Inf
+    # GEQ constraint
+    @addConstraint(m, aff >= w.con.lb)
+  else
+    # EQ or range - not allowed
+    error("Cannot robustify range constraints or equality constraints")
+  end
 
 end
 

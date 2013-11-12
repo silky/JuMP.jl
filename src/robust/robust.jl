@@ -285,10 +285,11 @@ type UncConstraint <: JuMPConstraint
   terms::FullAffExpr
   lb::Float64
   ub::Float64
+  wrangler #::AbstractWrangler
 end
 
 UncConstraint(terms::FullAffExpr,lb::Number,ub::Number) =
-  UncConstraint(terms,float(lb),float(ub))
+  UncConstraint(terms,float(lb),float(ub),SimpleLPWrangler())
 
 function addConstraint(m::RobustModel, c::UncConstraint)
   push!(m.uncertainconstr,c)
@@ -329,9 +330,9 @@ end
 function conToStr(c::UncConstraint)
   s = sense(c)
   if s == :range
-    return string(c.lb," <= ",affToStr(c.terms,false)," <= ",c.ub)
+    return string(c.lb," <= ",affToStr(c.terms)," <= ",c.ub)
   else
-    return string(affToStr(c.terms,false)," ",s," ",rhs(c))
+    return string(affToStr(c.terms)," ",s," ",rhs(c))
   end
 end
 
@@ -548,3 +549,4 @@ end
 
 
 include("robustsolve.jl")
+include("wrangler.jl")
