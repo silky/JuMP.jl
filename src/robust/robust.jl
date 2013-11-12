@@ -120,7 +120,6 @@ show(io::IO, u::Uncertain) = print(io, getName(u))
 
 ###############################################################################
 # Uncertain Affine Expression class
-# TODO(idunning): Can we make AffExpr parametric on a type? Or two types?
 # Holds a vector of tuples (Unc, Coeff)
 type UAffExpr
   uncs::Array{Uncertain,1}
@@ -132,6 +131,7 @@ UAffExpr() = UAffExpr(Uncertain[],Float64[],0.)
 UAffExpr(c::Float64) = UAffExpr(Uncertain[],Float64[],c)
 UAffExpr(u::Uncertain, c::Float64) = UAffExpr([u],[c],0.)
 UAffExpr(coeffs::Array{Float64,1}) = [UAffExpr(c) for c in coeffs]
+zero(::Type{UAffExpr}) = UAffExpr()  # For zeros(UAffExpr, dims...)
 
 print(io::IO, a::UAffExpr) = print(io, affToStr(a))
 show(io::IO, a::UAffExpr) = print(io, affToStr(a))
@@ -170,21 +170,13 @@ end
 
 ###############################################################################
 # Full Affine Expression class
-# TODO(idunning): Can we make AffExpr parametric on a type? Or two types?
 # TODO(idunning): Better name. In my other robust modelling tools I called it
 # something like this, but the catch then was that there we only two types of
 # affexpr - the one with UAffExpr coefficients = Full, and the UAffExpr itself
 # Holds a vector of tuples (Unc, Coeff)
-type FullAffExpr
-  vars::Array{Variable,1}
-  coeffs::Array{UAffExpr,1}
-  constant::UAffExpr
-end
+typealias FullAffExpr GenericAffExpr{UAffExpr,Variable}
 
 FullAffExpr() = FullAffExpr(Variable[],UAffExpr[],UAffExpr())
-
-print(io::IO, a::FullAffExpr) = print(io, affToStr(a))
-show(io::IO, a::FullAffExpr) = print(io, affToStr(a))
 
 # Pretty cool that this is almost the same as normal affExpr
 function affToStr(a::FullAffExpr, showConstant=true)
