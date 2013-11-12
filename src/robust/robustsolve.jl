@@ -6,7 +6,7 @@ end
 
 function solve(rm::RobustModel, preferred_mode=:Cut)
 
-  # MASTER PROBLEM
+  # Create master problem
   master = Model()
   master.objSense  = rm.objSense
   master.obj       = QuadExpr(Variable[],Variable[],Float64[],rm.obj)  # For now, only certain aff obj
@@ -46,12 +46,6 @@ function solve(rm::RobustModel, preferred_mode=:Cut)
   for iter = 1:2
     # Solve master
     master_status = solve(master)
-    #println("Solved master")
-    #println("CURRENT MASTER")
-    #println(master)
-    #println("END MASTER")
-    #println("Master solution:")
-    #println(master.colVal)
 
     # Generate cuts
     for i = 1:length(wrangler_modes)
