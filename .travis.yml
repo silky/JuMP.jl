@@ -18,3 +18,5 @@ script:
     - cd ~/.julia/JuMP/
     - julia test/runtests.jl
     - julia test/hygiene.jl
+    - julia test/robustops.jl
+    - julia test/robustsolve.jl
