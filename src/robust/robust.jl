@@ -102,6 +102,21 @@ function Variable(m::RobustModel,lower::Number,upper::Number,cat::Int,name::Stri
 end
 getName(m::RobustModel, col) = (m.colNames[col] == "" ? string("_col",col) : m.colNames[col])
 
+function Affine(rm::RobustModel, lower::Number, upper::Number, name::string, uncertains)
+  expr = AffExpr()
+  # Non affine part
+  g = Variable(rm, -Inf, +Inf, 0, string(name,"_g"))
+  expr += g
+  # Affine part
+  for u in uncertains
+    f = Variable(rm, -Inf, +Inf, 0, string(name,"_",getName(u)))
+    expr += u*f
+  end
+  # Bounds
+  addConstraint(rm, aff >= lower)
+  addConstraint(rm, aff <= upper)
+  return expr
+end
 
 ###############################################################################
 # Uncertain class
