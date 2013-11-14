@@ -130,13 +130,52 @@ function generateCut(w::SimpleLPWrangler, m::Model)
   @setObjective(w.cutting, w.cutting.objSense, sum{unc_coeffs[i]*w.cutvars[i], i = 1:num_uncs})
 
   # Solve it
-  #println("CUT FOR CON: $(conToStr(oracle.con))")
-  #println(oracle.cutting)
-  #println("ENDCUT")
-
   solve(w.cutting)
-  #println("Cut solution:")
-  #println(oracle.cutting.colVal)
+
+  # Calculate cut LHS
+  lhs = 0.0
+  num_vars = length(w.con.terms.vars)
+  # Variable part
+  for var_ind = 1:num_vars
+    coeff::UAffExpr = w.con.terms.coeffs[var_ind]
+    col_val = master_sol[w.con.terms.vars[var_ind].col]
+    lhs += coeff.constant * col_val
+    num_uncs = length(coeff.uncs)
+    for unc_ind = 1:num_uncs
+      coeff_unc = coeff.uncs[unc_ind]
+      coeff_coeff = coeff.coeffs[unc_ind]
+      lhs += w.cutting.colVal[coeff_unc.unc] * coeff_coeff[unc_ind] * col_val
+    end
+  end
+  # Non variable part
+    coeff = w.con.terms.constant
+    lhs += coeff.constant
+    num_uncs = length(coeff.uncs)
+    for unc_ind = 1:num_uncs
+      coeff_unc = coeff.uncs[unc_ind]
+      coeff_coeff = coeff.coeffs[unc_ind]
+      lhs += w.cutting.colVal[coeff_unc.unc] * coeff_coeff[unc_ind]
+    end
+  print(lhs, " ", w.con.lb, " ", w.con.ub)
+  if w.con.lb == -Inf
+    # LEQ constriant
+    println(" LEQ")
+    if lhs <= w.con.ub + 1e-6
+      # No violation
+      return false
+    end
+  elseif w.con.ub == +Inf
+    # GEQ constraint
+    println(" GEQ")
+    if lhs >= w.con.lb - 1e-6
+      # No violation
+      return false
+    end
+  else
+    # EQ or range - not allowed
+    error("Cannot robustify range constraints or equality constraints")
+  end
+
 
   # Now add that solution back in
   # TODO: Build map for this too
@@ -146,7 +185,7 @@ function generateCut(w::SimpleLPWrangler, m::Model)
                  w.con.terms.constant.constant)
   # Variable part
   for var_ind = 1:num_vars
-    coeff::UAffExpr = w.con.terms.coeffs[var_ind]
+    coeff = w.con.terms.coeffs[var_ind]
     num_uncs = length(coeff.uncs)
     for unc_ind = 1:num_uncs
       coeff_unc = coeff.uncs[unc_ind]
@@ -174,5 +213,6 @@ function generateCut(w::SimpleLPWrangler, m::Model)
     error("Cannot robustify range constraints or equality constraints")
   end
 
+  return true
 end
 

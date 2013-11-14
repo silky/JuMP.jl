@@ -19,7 +19,7 @@ function Test1()
 
   println(m)
 
-  status = solve(m)
+  status = solve(m, report=true)
 
   @test_approx_eq getValue(x1) 4.0
   @test_approx_eq getValue(x2) 0.0
