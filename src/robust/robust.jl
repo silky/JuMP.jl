@@ -113,8 +113,12 @@ function Affine(rm::RobustModel, lower::Number, upper::Number, name::string, unc
     expr += u*f
   end
   # Bounds
-  addConstraint(rm, aff >= lower)
-  addConstraint(rm, aff <= upper)
+  if lower != -Inf
+    addConstraint(rm, aff >= lower)
+  end
+  if upper != +Inf
+    addConstraint(rm, aff <= upper)
+  end
   return expr
 end
 
