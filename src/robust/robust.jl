@@ -29,19 +29,30 @@ type RobustModel
   #linconstrDuals::Vector{Float64}
   # internal solver model object
   internalModel
-  solverOptions
+  # Solver+option object from MathProgBase
+  solver::AbstractMathProgSolver
 end
 
 # Default constructor
-function RobustModel(sense::Symbol)
-  if (sense != :Max && sense != :Min)
-     error("Model sense must be :Max or :Min")
+function RobustModel(;solver=nothing)
+  if solver == nothing
+    RobustModel(AffExpr(),:Min,
+                LinearConstraint[],Any[],Any[],
+                0,String[],Float64[],Float64[],Int[],
+                0,String[],Float64[],Float64[],
+                0,Float64[],Float64[],nothing,MathProgBase.MissingSolver("",Symbol[]))
+  else
+    if !isa(solver,AbstractMathProgSolver)
+      error("solver argument ($solver) must be an AbstractMathProgSolver")
+    end
+    # user-provided solver must support problem class
+    RobustModel(AffExpr(),:Min,
+                LinearConstraint[],Any[],Any[],
+                0,String[],Float64[],Float64[],Int[],
+                0,String[],Float64[],Float64[],
+                0,Float64[],Float64[],nothing,solver)
   end
-  RobustModel(AffExpr(),sense,
-              LinearConstraint[],Any[],Any[],
-              0,String[],Float64[],Float64[],Int[],
-              0,String[],Float64[],Float64[],
-              0,Float64[],Float64[],nothing,Dict())
+
 end
 
 # Pretty print

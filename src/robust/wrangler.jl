@@ -156,17 +156,14 @@ function generateCut(w::SimpleLPWrangler, m::Model)
       coeff_coeff = coeff.coeffs[unc_ind]
       lhs += w.cutting.colVal[coeff_unc.unc] * coeff_coeff[unc_ind]
     end
-  print(lhs, " ", w.con.lb, " ", w.con.ub)
   if w.con.lb == -Inf
     # LEQ constriant
-    println(" LEQ")
     if lhs <= w.con.ub + 1e-6
       # No violation
       return false
     end
   elseif w.con.ub == +Inf
     # GEQ constraint
-    println(" GEQ")
     if lhs >= w.con.lb - 1e-6
       # No violation
       return false

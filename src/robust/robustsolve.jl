@@ -8,7 +8,7 @@ function solve(rm::RobustModel;preferred_mode=:Cut,report=false)
 
   # Create master problem
   start_time = time()
-  master = Model()
+  master = Model(solver=rm.solver)
   master.objSense  = rm.objSense
   master.obj       = QuadExpr(Variable[],Variable[],Float64[],rm.obj)  # For now, only certain aff obj
   master.linconstr = rm.certainconstr

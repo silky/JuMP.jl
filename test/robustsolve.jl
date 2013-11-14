@@ -1,18 +1,19 @@
 using JuMP
 using Base.Test
-
+using Gurobi
 # Test models
 
 function Test1()
   println("====================================")
   println("TEST 1")
-  m = RobustModel(:Max)
+  m = RobustModel()
 
   x1 = Variable(m, 0, Inf, 0, "x1") #@defVar(m, x1 >= 0)
   x2 = Variable(m, 0, Inf, 0, "x2") #@defVar(m, x2 >= 0)
   u = Uncertain(m, 0.3, 0.5, "u")
 
   m.obj = x1 + x2
+  m.objSense = :Max
 
   addConstraint(m, u*x1 + 1*x2 <= 2.)
   addConstraint(m, 1*x1 + 1*x2 <= 6.)
@@ -28,7 +29,7 @@ end
 function Test2()
   println("====================================")
   println("TEST 2")
-  m = RobustModel(:Max)
+  m = RobustModel()
 
   x1 = Variable(m, 0, Inf, 0, "x1") #@defVar(m, x1 >= 0)
   x2 = Variable(m, 0, Inf, 0, "x2") #@defVar(m, x2 >= 0)
@@ -36,6 +37,7 @@ function Test2()
   u2 = Uncertain(m, 0.0, 2.0, "u2")
 
   m.obj = x1 + x2
+  m.objSense = :Max
 
   addConstraint(m, u1*x1 + 1*x2 <= 2.)
   addConstraint(m, u2*x1 + 1*x2 <= 6.)
@@ -51,7 +53,7 @@ end
 function Test3()
   println("====================================")
   println("TEST 3")
-  m = RobustModel(:Max)
+  m = RobustModel()
 
   x1 = Variable(m, 0, Inf, 0, "x1")
   x2 = Variable(m, 0, Inf, 0, "x2")
@@ -60,6 +62,7 @@ function Test3()
   u2 = Uncertain(m, 0.5, 1.5, "u2");
 
   m.obj = x1 + x2
+  m.objSense = :Max
 
   # Constraints
   addConstraint(m, u1*x1 <= 1)
@@ -81,12 +84,13 @@ end
 function Test4()
   println("====================================")
   println("TEST 4")
-  m = RobustModel(:Max)
+  m = RobustModel()
 
   x = Variable(m, 0, Inf, 0, "x");
   u = Uncertain(m, 3.0, 4.0, "u");
 
-  m.obj = 1.0*x;
+  m.obj = 1.0*x
+  m.objSense = :Max
 
   # Constraints
   addConstraint(m, 1.0*x -1.0*u <= 0.0)
