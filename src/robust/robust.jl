@@ -1,5 +1,6 @@
 export RobustModel, Uncertain, UAffExpr, FullAffExpr
 export affToStr, affToStr
+export Affine
 
 type RobustModel
   obj
@@ -102,7 +103,7 @@ function Variable(m::RobustModel,lower::Number,upper::Number,cat::Int,name::Stri
 end
 getName(m::RobustModel, col) = (m.colNames[col] == "" ? string("_col",col) : m.colNames[col])
 
-function Affine(rm::RobustModel, lower::Number, upper::Number, name::string, uncertains)
+function Affine(rm::RobustModel, lower, upper, name, uncertains)
   expr = AffExpr()
   # Non affine part
   g = Variable(rm, -Inf, +Inf, 0, string(name,"_g"))
@@ -114,13 +115,23 @@ function Affine(rm::RobustModel, lower::Number, upper::Number, name::string, unc
   end
   # Bounds
   if lower != -Inf
-    addConstraint(rm, aff >= lower)
+    addConstraint(rm, expr >= lower)
   end
   if upper != +Inf
-    addConstraint(rm, aff <= upper)
+    addConstraint(rm, expr <= upper)
   end
   return expr
 end
+
+function printAffine(expr)
+  println(affToStr(expr))
+  rm = expr.vars[1].m
+  for i in 2:length(expr.vars)
+    print(getValue(expr.vars[i]), " ", getName(expr.coeffs[i].uncs[1]), " + ")
+  end
+  println(getValue(expr.vars[1]))
+end
+export printAffine
 
 ###############################################################################
 # Uncertain class
@@ -143,7 +154,7 @@ Uncertain(m::Model,lower::Number,upper::Number) =
 
 # Name setter/getters
 setName(u::Uncertain,n::String) = (u.m.uncNames[v.col] = n)
-getName(u::Uncertain) = (u.m.uncNames[u.unc] == "" ? string("_unc",u.unc) : u.m.uncNames[v.unc])
+getName(u::Uncertain) = (u.m.uncNames[u.unc] == "" ? string("_unc",u.unc) : u.m.uncNames[u.unc])
 getNameU(m::RobustModel, unc) = (m.uncNames[unc] == "" ? string("_unc",unc) : m.uncNames[unc])
 print(io::IO, u::Uncertain) = print(io, getName(u))
 show(io::IO, u::Uncertain) = print(io, getName(u))
@@ -471,6 +482,7 @@ function (>=)(lhs::FullAffExpr, rhs::Number)
 end
 
 # Uncertain
+(-)(lhs::Uncertain) = UAffExpr([lhs],[-1.],0.)
 # Uncertain--Number
 (+)(lhs::Uncertain, rhs::Number) = (+)(   +rhs, lhs)
 (-)(lhs::Uncertain, rhs::Number) = (+)(   -rhs, lhs)
