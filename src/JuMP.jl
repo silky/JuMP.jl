@@ -50,7 +50,8 @@ export CONTINUOUS, INTEGER
 ###############################################################################
 # Model class
 # Keeps track of all model and column info
-type Model
+abstract AbstractModel
+type Model <: AbstractModel
   obj#::QuadExpr
   objSense::Symbol
   
@@ -207,11 +208,11 @@ end
 # Variable class
 # Doesn't actually do much, just a pointer back to the model
 type Variable
-  m::Model
+  m::AbstractModel
   col::Int
 end
 
-function Variable(m::Model,lower::Number,upper::Number,cat::Int,name::String)
+function Variable(m::AbstractModel,lower::Number,upper::Number,cat::Int,name::String)
   m.numCols += 1
   push!(m.colNames, name)
   push!(m.colLower, convert(Float64,lower))
