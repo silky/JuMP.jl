@@ -1,6 +1,7 @@
 export RobustModel, Uncertain, UAffExpr, FullAffExpr
 export affToStr, affToStr
 export Affine
+export @defUnc
 
 type RobustModel
   obj
@@ -56,6 +57,11 @@ function RobustModel(;solver=nothing)
 
 end
 
+function setObjective(m::RobustModel, sense::Symbol, a::AffExpr)
+  m.obj = a
+  m.objSense = sense
+end
+
 # Pretty print
 function print(io::IO, m::RobustModel)
   println(io, string(m.objSense," ",affToStr(m.obj)))
@@ -101,6 +107,7 @@ function Variable(m::RobustModel,lower::Number,upper::Number,cat::Int,name::Stri
   push!(m.colCat, cat)
   return Variable(m, m.numCols)
 end
+Variable(m::RobustModel,lower::Number,upper::Number,cat::Int) = Variable(m,lower,upper,cat,"")
 getName(m::RobustModel, col) = (m.colNames[col] == "" ? string("_col",col) : m.colNames[col])
 
 function Affine(rm::RobustModel, lower, upper, name, uncertains)
@@ -149,7 +156,7 @@ function Uncertain(m::RobustModel,lower::Number,upper::Number,name::String)
   return Uncertain(m, m.numUncs)
 end
 
-Uncertain(m::Model,lower::Number,upper::Number) =
+Uncertain(m::RobustModel,lower::Number,upper::Number) =
   Uncertain(m,lower,upper,"")
 
 # Name setter/getters
@@ -584,3 +591,4 @@ end
 
 include("robustsolve.jl")
 include("wrangler.jl")
+include("robustmacro.jl")
