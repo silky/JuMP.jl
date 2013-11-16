@@ -122,11 +122,11 @@ function Model(;solver=nothing,lpsolver=MathProgBase.defaultLPsolver,mipsolver=M
 end
 
 # Getters/setters
-getNumVars(m::Model) = m.numCols
-getNumConstraints(m::Model) = length(m.linconstr)
-getObjectiveValue(m::Model) = m.objVal
-getObjectiveSense(m::Model) = m.objSense
-function setObjectiveSense(m::Model, newSense::Symbol)
+getNumVars(m::AbstractModel) = m.numCols
+getNumConstraints(m::AbstractModel) = length(m.linconstr)
+getObjectiveValue(m::AbstractModel) = m.objVal
+getObjectiveSense(m::AbstractModel) = m.objSense
+function setObjectiveSense(m::AbstractModel, newSense::Symbol)
   if (newSense != :Max && newSense != :Min)
     error("Model sense must be :Max or :Min")
   end
@@ -444,7 +444,7 @@ end
 LinearConstraint(terms::AffExpr,lb::Number,ub::Number) =
   LinearConstraint(terms,float(lb),float(ub))
 
-function addConstraint(m::Model, c::LinearConstraint)
+function addConstraint(m::AbstractModel, c::LinearConstraint)
   push!(m.linconstr,c)
   if !m.firstsolve
     # TODO: we don't check for duplicates here
