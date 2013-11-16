@@ -83,7 +83,11 @@ function pMedian(numFacility::Int,numCustomer::Int,numLocation::Int,useMPS)
   end
   writeTime = toq()
 
-  return buildTime, writeTime
+  tic()
+  xsol = getValue(x)
+  accessTime = toq()
+
+  return buildTime, writeTime, accessTime
 end
 
 function cont5(n,useMPS)
@@ -130,7 +134,11 @@ function cont5(n,useMPS)
   end
   writeTime = toq()
 
-  return buildTime, writeTime
+  tic()
+  ysol = getValue(y)
+  accessTime = toq()
+
+  return buildTime, writeTime, accessTime
 end
 
 
@@ -138,27 +146,37 @@ function RunTests()
   # Pmedian
   pmedian_build = Float64[]
   pmedian_write = Float64[]
+  pmedian_access = Float64[]
   for runs = 1:9
-    bt, wt = pMedian(100,100,5000,false)
+    bt, wt, ac = pMedian(100,100,5000,false)
     push!(pmedian_build, bt)
     push!(pmedian_write, wt)
+    push!(pmedian_access, ac)
+    gc()
   end
   sort!(pmedian_build)
   sort!(pmedian_write)
+  sort!(pmedian_access)
   print("PMEDIAN BUILD MIN=",minimum(pmedian_build),"  MED=",pmedian_build[5],"\n")
+  print("PMEDIAN ACCESS MIN=",minimum(pmedian_access),"  MED=",pmedian_access[5],"\n")
   print("PMEDIAN WRITE MIN=",minimum(pmedian_write),"  MED=",pmedian_write[5],"\n")
 
   # Cont5
   cont5_build = Float64[]
   cont5_write = Float64[]
+  cont5_access = Float64[]
   for runs = 1:9
-    bt, wt = cont5(500,false)
+    bt, wt, ac = cont5(500,false)
     push!(cont5_build, bt)
     push!(cont5_write, wt)
+    push!(cont5_access, ac)
+    gc()
   end
   sort!(cont5_build)
   sort!(cont5_write)
+  sort!(cont5_access)
   print("CONT5 BUILD   MIN=",minimum(cont5_build),"  MED=",cont5_build[5],"\n")
+  print("CONT5 ACCESS   MIN=",minimum(cont5_access),"  MED=",cont5_access[5],"\n")
   print("CONT5 WRITE   MIN=",minimum(cont5_write),"  MED=",cont5_write[5],"\n")
 
 end
