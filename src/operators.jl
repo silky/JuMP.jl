@@ -40,7 +40,7 @@
 # Variable--Variable
 (+)(lhs::Variable, rhs::Variable) = AffExpr([lhs,rhs], [1.,+1.], 0.)
 (-)(lhs::Variable, rhs::Variable) = AffExpr([lhs,rhs], [1.,-1.], 0.)
-(*)(lhs::Variable, rhs::Variable) = QuadExpr([lhs],[rhs],[1.],AffExpr(Variable[],Float64[],0.))
+(*){T}(lhs::Variable{T}, rhs::Variable{T}) = QuadExpr([lhs],[rhs],[1.],AffExpr(Variable{T}[],Float64[],0.))
 (/)(lhs::Variable, rhs::Variable) = error("Cannot divide a variable by a variable")
 # Variable--AffExpr
 (+)(lhs::Variable, rhs::AffExpr) = AffExpr(vcat(rhs.vars,lhs),vcat( rhs.coeffs,1.), rhs.constant)
@@ -76,7 +76,7 @@ end
 (+)(lhs::GenericAffExpr, rhs::GenericAffExpr) = GenericAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs, rhs.coeffs),lhs.constant+rhs.constant)
 (-)(lhs::GenericAffExpr, rhs::GenericAffExpr) = GenericAffExpr(vcat(lhs.vars,rhs.vars),vcat(lhs.coeffs,-rhs.coeffs),lhs.constant-rhs.constant)
 function (*)(lhs::AffExpr, rhs::AffExpr)
-  ret = QuadExpr(Variable[],Variable[],Float64[],AffExpr(Variable[],Float64[],0.))
+  ret = QuadExpr()
 
   # Quadratic terms
   n = length(lhs.coeffs)

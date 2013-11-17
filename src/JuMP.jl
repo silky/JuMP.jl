@@ -271,8 +271,8 @@ end
 print(io::IO, a::GenericAffExpr) = print(io, affToStr(a))
 show(io::IO, a::GenericAffExpr) = print(io, affToStr(a))
 
-typealias AffExpr GenericAffExpr{Float64,Variable}
-AffExpr() = AffExpr(Variable[],Float64[],0.)
+typealias AffExpr GenericAffExpr{Float64,Variable{Model}}
+AffExpr() = AffExpr(Variable{Model}[],Float64[],0.)
 
 function setObjective(m::Model, a::AffExpr)
   Base.warn_once("Calling setObjective without specifying an objective sense is deprecated. Use setObjective(model, sense, expr) (or @setObjective(model, sense, expr)).")
@@ -351,14 +351,14 @@ end
 ###############################################################################
 # QuadExpr class
 # Holds a vector of tuples (Var, Var, Coeff), as well as an AffExpr
-type QuadExpr
-  qvars1::Vector{Variable}
-  qvars2::Vector{Variable}
+type QuadExpr{ModelType<:AbstractModel}
+  qvars1::Vector{Variable{ModelType}}
+  qvars2::Vector{Variable{ModelType}}
   qcoeffs::Vector{Float64}
   aff::AffExpr
 end
 
-QuadExpr() = QuadExpr(Variable[],Variable[],Float64[],AffExpr())
+QuadExpr() = QuadExpr{Model}(Variable{Model}[],Variable{Model}[],Float64[],AffExpr())
 
 function setObjective(m::Model, q::QuadExpr)
   Base.warn_once("Calling setObjective without specifying an objective sense is deprecated. Use setObjective(model, sense, expr).")
