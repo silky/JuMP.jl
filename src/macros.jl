@@ -277,7 +277,7 @@ macro defVar(m, x, extra...)
             end
         end
         
-        mac = Expr(:macrocall,symbol("@gendict"),varname,:Variable,idxsets...)
+        mac = Expr(:macrocall,symbol("@gendict"),varname,:(Variable{typeof($(esc(m)))}),idxsets...)
         code = quote 
             $mac
             $code

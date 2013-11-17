@@ -207,19 +207,19 @@ end
 ###############################################################################
 # Variable class
 # Doesn't actually do much, just a pointer back to the model
-type Variable
-  m::AbstractModel
+type Variable{ModelType <: AbstractModel}
+  m::ModelType
   col::Int
 end
 
-function Variable(m::AbstractModel,lower::Number,upper::Number,cat::Int,name::String)
+function Variable{T<:AbstractModel}(m::T,lower::Number,upper::Number,cat::Int,name::String)
   m.numCols += 1
   push!(m.colNames, name)
   push!(m.colLower, convert(Float64,lower))
   push!(m.colUpper, convert(Float64,upper))
   push!(m.colCat, cat)
   push!(m.colVal,NaN)
-  return Variable(m, m.numCols)
+  return Variable{T}(m, m.numCols)
 end
 
 Variable(m::Model,lower::Number,upper::Number,cat::Int) =
