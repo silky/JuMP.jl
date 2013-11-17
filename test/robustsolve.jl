@@ -47,7 +47,7 @@ function Test4()
   @defVar(m, x >= 0)
   @defUnc(m, 3.0 <= u <= 4.0);
   setObjective(m, :Max, 1.0x)
-  addConstraint(m, 1.0*x - 1.0*u <= 0.0)
+  addConstraint(m, 1.0*x <= 1.0*u)
   status = solve(m)
   @test_approx_eq getValue(x) 3.0
 end
